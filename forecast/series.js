@@ -10,7 +10,7 @@
   function qualitative(b,field){
     if(kind(b)==='numeric')return null;
     if(kind(b)==='mixed')return {text:'정성 포함',title:'정량과 정성 예보가 함께 있는 구간으로 합계량을 표시하지 않습니다.'};
-    var snow=field==='snow',code=b[field+'_code'],labels=snow?['강설 없음','보통 눈','많은 눈']:['강수 없음','약한 비','비','강한 비'];
+    var snow=field==='snow',code=b[field+'_code'],labels=snow?['','보통 눈','많은 눈']:['','약한 비','비','강한 비'];   // 2026-11-09 사용자: 없음은 다른 칸처럼 빈칸(미수집은 '-')
     var bounds=snow?['강설 없음','시간당 1cm 미만','시간당 1cm 이상']:['강수 없음','시간당 3mm 미만','시간당 3mm 이상 15mm 미만','시간당 15mm 이상'];
     return Number.isInteger(code)&&code>=0&&code<labels.length?{text:labels[code],title:'정성 예보: '+bounds[code]+'. 3시간 누적량이 아닙니다.'}:{text:'-',title:'강수·적설 강도를 확인할 수 없습니다.'};
   }

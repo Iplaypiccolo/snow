@@ -26,7 +26,7 @@ test('코드·혼합·양 결측인 먼 칸도 기온/확률이 있으면 유지
 
 test('적설 정성 코드2는 많은 눈이며2cm 합계가 아님',()=>{const q=qualitative({amount_kind:'code',snow_code:2},'snow');assert.equal(q.text,'많은 눈');assert.ok(q.title.includes('시간당 1cm 이상'));});
 test('강수 정성 코드1·2·3의 강도 표현',()=>{assert.deepEqual([1,2,3].map(pcp_code=>qualitative({amount_kind:'code',pcp_code},'pcp').text),['약한 비','비','강한 비']);});
-test('정성0은강설/강수없음으로표시·미확인코드는0으로만들지않음',()=>{assert.equal(qualitative({amount_kind:'code',snow_code:0},'snow').text,'강설 없음');assert.equal(qualitative({amount_kind:'code',pcp_code:0},'pcp').text,'강수 없음');for(const snow_code of [null,9,-1,1.5])assert.equal(qualitative({amount_kind:'code',snow_code},'snow').text,'-');});
+test('정성0은빈칸(미수집은-)·미확인코드는0으로만들지않음',()=>{assert.equal(qualitative({amount_kind:'code',snow_code:0},'snow').text,'');assert.equal(qualitative({amount_kind:'code',pcp_code:0},'pcp').text,'');for(const snow_code of [null,9,-1,1.5])assert.equal(qualitative({amount_kind:'code',snow_code},'snow').text,'-');});
 test('혼합 구간은 양으로 합산하지 않고 정성 포함 표시',()=>{assert.equal(qualitative({amount_kind:'mixed'},'pcp').text,'정성 포함');assert.equal(qualitative({amount_kind:'numeric'},'pcp'),null);});
 test('먼 정성 한 칸이 도착하면 즉시 한 칸 추가·기온/확률 유지',()=>{const d=sample(13),before=combine(d).length,t=Date.parse(d.upper.start_at)+24*H;
  d.tail.bins=[{first_at:new Date(t).toISOString(),last_at:new Date(t+2*H).toISOString(),hours:3,amount_kind:'code',snow:2,pcp:3,snow_code:2,pcp_code:3,tmin:-4,pop:90}];
