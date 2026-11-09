@@ -25,7 +25,7 @@
       var key=slotEnd(Date.parse(b.first_at)),old=groups[key];
       // 86(2026-11-09 사용자): 3시간 칸 습도 = 그 칸 시각 중 최고
       if(!old){groups[key]=Object.assign({},b,{amount_kind:kind(b)});if(kind(b)!=='numeric')['snow','snow_hi','pcp','pcp_hi'].forEach(function(k){groups[key][k]=null;});return;}
-      old.reh=maximum(old.reh,b.reh);old.reh_n=(old.reh_n||0)+(b.reh!=null?(b.reh_n||1):0);
+      old.reh=maximum(old.reh,b.reh);
       var ak=kind(old),bk=kind(b);
       old.amount_kind=ak===bk?ak:'mixed';
       ['snow_code','pcp_code'].forEach(function(k){old[k]=old[k]==null||b[k]==null?null:Math.max(old[k],b[k]);});
@@ -37,7 +37,7 @@
     for(var i=skip||0;i<24;i++){
       var t=start+i*H,iso=new Date(t).toISOString();
       var snow=sr.s && sr.s[i],rain=sr.p && sr.p[i];
-      insert({first_at:iso,last_at:iso,hours:1,reh:sr.h&&sr.h[i]!=null?sr.h[i]:null,reh_n:1,snow:snow==null?null:snow,snow_hi:snow==null?null:snow+((sr.sq||[])[i]?1:0),pcp:rain==null?null:rain,pcp_hi:rain==null?null:rain+((sr.pq||[])[i]?1:0),tmin:sr.t && sr.t[i],pop:sr.r && sr.r[i]});
+      insert({first_at:iso,last_at:iso,hours:1,reh:sr.h&&sr.h[i]!=null?sr.h[i]:null,snow:snow==null?null:snow,snow_hi:snow==null?null:snow+((sr.sq||[])[i]?1:0),pcp:rain==null?null:rain,pcp_hi:rain==null?null:rain+((sr.pq||[])[i]?1:0),tmin:sr.t && sr.t[i],pop:sr.r && sr.r[i]});
     }
     (data.tail && data.tail.bins || []).forEach(function(b){
       // 정성 구간도 시간 칸을 유지하며 코드 강도를 합계량에 넣지 않는다.

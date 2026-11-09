@@ -306,7 +306,7 @@ class Mock:
                     b = dt.datetime.fromtimestamp(((int(a.timestamp())-3600)//10800)*10800+10800, a.tzinfo)
                     expected = int((b-a).total_seconds()/3600)+1
                     hours = expected-1 if i==0 and expected>1 else expected
-                    bins.append({"reh": 70.0, "reh_n": hours, "first_at": a.isoformat(), "last_at": b.isoformat(), "hours": hours, "expected_hours": expected, "partial": hours<3, "snow": 3 if i<5 else None, "snow_hi": 4 if i<5 else None, "pcp": 6 if i<5 else None, "pcp_hi": 6 if i<5 else None, "tmin": -2, "pop": 80, "amount_kind":"numeric" if i<5 else "code", "quantity_hours":hours if i<5 else 0, "code_hours":0 if i<5 else hours, "snow_code":None if i<5 else [1,2,0][i-5], "pcp_code":None if i<5 else [2,3,0][i-5]})
+                    bins.append({"reh": 70.0, "first_at": a.isoformat(), "last_at": b.isoformat(), "hours": hours, "expected_hours": expected, "partial": hours<3, "snow": 3 if i<5 else None, "snow_hi": 4 if i<5 else None, "pcp": 6 if i<5 else None, "pcp_hi": 6 if i<5 else None, "tmin": -2, "pop": 80, "amount_kind":"numeric" if i<5 else "code", "quantity_hours":hours if i<5 else 0, "code_hours":0 if i<5 else hours, "snow_code":None if i<5 else [1,2,0][i-5], "pcp_code":None if i<5 else [2,3,0][i-5]})
                     a = b + dt.timedelta(hours=1)
                 payload={"status":"ok", "upper":{"series":(dict(c[7],h=[60+i for i in range(24)]) if self.fc_humidity and isinstance(c[7],dict) else c[7]), "start_at":self.fc_start,"end_at":self.fc_end}, "tail":{"bins":bins}}
                 if tbl == 'forecast_cell_detail':

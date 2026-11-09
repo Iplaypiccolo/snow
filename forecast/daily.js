@@ -2,7 +2,7 @@
    2026-11-09(마이그레이션 83): 일별 자료는 격자별로 기억하고, 열려 있는 동안 10분마다 forecast_version 의 d 만 확인해 바뀐 때만 다시 받음 */
 (function(){
   'use strict';
-  var D={key:null,seq:0,data:null,error:false,closed:false,tab:'hourly',timer:null,busy:0,geo:{scale:1.2,x:null,y:null},ver:null,cache:{}};
+  var D={key:null,seq:0,data:null,error:false,closed:false,tab:'hourly',timer:null,busy:0,geo:{scale:null,x:null,y:null},ver:null,cache:{}};
   var ids=['fc-pin','fc-tail','fc-daily'],tabs=['hourly','three','daily'];
   function $(id){return document.getElementById(id);}
   function phone(){return window.matchMedia('(max-width:760px)').matches;}
@@ -91,6 +91,7 @@
     }else{
       mobile.hidden=true;ids.forEach(function(id){var el=$(id);if(el.parentNode!==root)root.appendChild(el);el.removeAttribute('role');el.removeAttribute('aria-hidden');el.removeAttribute('aria-labelledby');});
       box.hidden=!D.key||D.closed;if(box.hidden)return;
+      if(D.geo.scale==null)D.geo.scale=window.ForecastUI.pinDefault;      // 기본 배율은 ui.js 한 곳에만
       var state=window.ForecastUI._state(),panels=ids.map(function(id,i){return{el:$(id),geo:[state.pinGeo,state.tailGeo,D.geo][i]};}).filter(function(p){return !p.el.hidden&&p.el.querySelector('.fc-pin-in');});
       var total=0,overhead=0;
       panels.forEach(function(p){p.el.style.maxHeight='none';p.el.style.bottom='auto';p.inner=p.el.querySelector('.fc-pin-in');p.inner.style.zoom=p.geo.scale;total+=p.el.offsetHeight;overhead+=p.el.offsetHeight-p.inner.getBoundingClientRect().height;});
@@ -123,5 +124,5 @@
     layout();
   }
   window.addEventListener('resize',function(){layout();if(visible()&&!D.data)fetchDaily();schedule();});
-  window.ForecastDaily={sync:sync,layout:layout,geo:function(){return D.geo;},table:table,icon:icon};
+  window.ForecastDaily={sync:sync,layout:layout,geo:function(){if(D.geo.scale==null)D.geo.scale=window.ForecastUI.pinDefault;return D.geo;},table:table,icon:icon};
 })();

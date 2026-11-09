@@ -133,7 +133,7 @@
   // from~to(번호) 구간을 step 시간씩 묶어 표 하나 — step 3 이면 합·최저, step 1 이면 그 시각 값
   function tableBlock(sr, start, from, to, step) {
     var head = '', rs = '', rp = '', rt = '', ro = '', rh = '', hasPop = !!(sr.r && sr.r.length), vn = sr.vn || 0;
-    var hasHum = !!(sr.h && sr.h.slice(from, to).some(function (v) { return v != null; }));      // 85: 단기 습도가 있을 때만 줄을 보임      // r = 강수확률(%), 서버에 있을 때만 줄을 보임. vn = 앞에서 몇 시각이 초단기 값인지
+    var hasHum = !!(sr.h && sr.h.slice(from, to).some(function (v) { return v != null; }));      // r = 강수확률, h = 습도(85): 서버에 있을 때만 줄을 보임. vn = 앞에서 몇 시각이 초단기 값인지
     function mark(html, i) { return i < vn ? html.replace('<td class="', '<td class="vs ') : html; }
     for (var i = from; i < to; i += step) {
       var d = hourAt(start, i), part = function (k) { return (sr[k] || []).slice(i, Math.min(i + step, to)); };
@@ -157,7 +157,7 @@
     return '<div class="fc-trend-box big"><div class="fc-scroll" tabindex="0" aria-label="48시간 예보 가로 스크롤">'+tableBlock(sr,start,window.ForecastSeries.skipHours(start,fcNow()),Math.min(48,(sr.s||[]).length),1)+'</div></div>';
   }
   // 고정 창 위치·크기(컴퓨터 화면만, 2026-11-03): scale = 글자·표 배율, x·y = 지도 안 왼쪽 위(null = 처음 자리 오른쪽 위). 지도보다 커지거나 밖으로 나가지 않게 맞춤
-  var PIN_KEY = 'ss_fc_pin', PIN_BODY = 440, PIN_PAD = 14, PIN_MIN = 0.8, PIN_DEFAULT = 1.2;      // 2026-11-09 사용자: 세 창 기본 크기 20% 크게(1 → 1.2, 기억한 크기는 한 번 초기화)      // PIN_BODY·PIN_PAD = 배율 1일 때 표 폭·창 안팎 여백(px)
+  var PIN_KEY = 'ss_fc_pin', PIN_BODY = 440, PIN_PAD = 14, PIN_MIN = 0.8, PIN_DEFAULT = 1.2;      // PIN_BODY·PIN_PAD = 배율 1일 때 표 폭·창 안팎 여백(px). PIN_DEFAULT = 세 창 기본 배율(2026-11-09 20% 크게, 일별 창도 이 값)
   function isPhone() { return window.matchMedia('(max-width:760px)').matches; }
   function loadPinGeo() { try { var j = JSON.parse(localStorage.getItem(PIN_KEY) || 'null'); if (j && j.scale > 0 && j.layout==='compact-v3') return j; } catch (e) {} return { scale: PIN_DEFAULT, x: null, y: null, layout:'compact-v3' }; }
   function savePinGeo() { try { localStorage.setItem(PIN_KEY, JSON.stringify(S.pinGeo)); } catch (e) {} }
@@ -559,5 +559,5 @@
   }
   // 다른 화면(장비 지원)에서 그 지사로 바로 오기
   function openBranch(id) { S.pendingFocus = id; }
-  window.ForecastUI = { init: init, show: show, openBranch: openBranch, closeSelection: unpin, version: fcVersion, _state: function () { return S; } };
+  window.ForecastUI = { init: init, show: show, openBranch: openBranch, closeSelection: unpin, version: fcVersion, pinDefault: PIN_DEFAULT, _state: function () { return S; } };
 })();

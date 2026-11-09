@@ -52,7 +52,7 @@
 .fc-tt thead th{background:#eef3f7;font-weight:700;color:#444;line-height:1.1;}
 .fc-tt thead th small{display:block;font-weight:400;font-size:8.5px;color:#888;}
 .fc-tt th.lb{width:66px;text-align:left;padding-left:3px;font-family:inherit;font-weight:700;font-size:10.5px;background:#f3f7fa;letter-spacing:-0.08em;}
-.fc-tt th.lb small{font-weight:700;font-size:10px;color:#3d5568;margin-left:1px;letter-spacing:0;}      /* 2026-11-09 사용자: 단위가 잘 보이게(진하게·크게), '강수확률%' 가 넘치지 않게 자간을 줄임 */      /* 2026-11-09 사용자: 단위가 잘 보이게(진하게·크게) */
+.fc-tt th.lb small{font-weight:700;font-size:10px;color:#3d5568;margin-left:1px;letter-spacing:0;}      /* 2026-11-09 사용자: 단위가 잘 보이게(진하게·크게), '강수확률%' 가 넘치지 않게 자간을 줄임 */
 .fc-tt th.s{color:#2e5fb8;} .fc-tt th.p{color:#2f7d4f;} .fc-tt th.o{color:#1f7a8c;} .fc-tt th.t{color:#b0392b;}
 .fc-tt td.v{font-weight:700;} .fc-tt td.z{color:#aaa;} .fc-tt td.neg{color:#1d5fb0;}
 .fc-tt-cap{font-size:10px;color:#777;margin-top:-3px;}
@@ -71,7 +71,6 @@
 .fc-detail td:first-child{font-family:inherit;}
 
 /* 초단기예보 값인 칸(앞 6시간)은 vs 표시만 남기고 색칠하지 않음(2026-11-09 사용자: 다른 칸과 같은 형식) */
-.fc-vs-key{display:inline-block;width:10px;height:10px;margin-right:4px;background:#fff3c4;border:1px solid #d6c27a;vertical-align:-1px;}
 /* 고정 창: 제목을 끌어 이동, 아래 모서리로 크기 조절(컴퓨터 화면만, 폭·글자 배율은 ui.js) */
 .fc-pin-head{cursor:move;user-select:none;touch-action:none;}
 .fc-pin-x{cursor:pointer;}

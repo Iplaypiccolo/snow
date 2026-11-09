@@ -44,6 +44,12 @@
 
 ## 기록 (최신이 맨 위)
 
+### 2026-11-09 · 커밋 (이 기록 커밋 하나) · 코드 검토 뒤 정리(SQL87): 습도 개수 값 삭제, 기본 크기 한 곳, 낡은 설명 삭제
+- 사용자 "안쓰는건 지워" 후 `supabase/migrations/20261109_87_forecast_humidity_drop_count.sql` 적용: 3시간 칸 `reh_n` 뺌(확인: 대관령 26칸 모두 reh 있음, reh_n 0).
+- `forecast/series.js`·`tests/_sb_mock.py` reh_n 삭제. `forecast/daily.js` 기본 배율은 `ForecastUI.pinDefault` 사용. `forecast/style.css` 안 쓰는 `.fc-vs-key` 삭제, 겹친 설명 정리.
+- 남은 검토 항목(사용자와 상의 중): 오늘 칸 계산 방식, 일별 계산 시험 보강, 마우스 표 칸 폭·이름, 서버의 격자 위치 반복 계산, 창 배치 반복 측정.
+— ✍ Claude Code 작성
+
 ### 2026-11-09 · 커밋 (이 기록 커밋 하나) · 격자 창 표 항목 이름 자간 줄임
 - 사용자 "강수확률%가 너무 길어서 삐져나왔어. 자간을 좀 줄여서": `forecast/style.css` 항목 칸 글자 간격 -0.08em(휴대폰 -0.1em, 칸 48px), 단위 앞 간격 1px. 시험에 컴퓨터·휴대폰 항목 이름이 칸 밖으로 안 나가는지 확인 추가.
 — ✍ Claude Code 작성
