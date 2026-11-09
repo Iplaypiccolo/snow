@@ -78,7 +78,7 @@
 /* 고정 창: 제목을 끌어 이동, 아래 모서리로 크기 조절(컴퓨터 화면만, 폭·글자 배율은 ui.js) */
 .fc-pin-x{cursor:pointer;}
 .fc-pin-in{width:396px;}
-.fc-pin-grip{position:absolute;bottom:0;width:16px;height:16px;touch-action:none;z-index:4;}      /* 표 왼쪽 고정 칸(sticky)보다 위 */
+.fc-pin-grip{position:absolute;bottom:0;width:20px;height:20px;touch-action:none;z-index:5;}      /* 표 왼쪽 고정 칸(sticky)보다 위. 아래 모서리 = 배율(대각선) */
 .fc-pin-grip.r{right:0;cursor:nwse-resize;background:linear-gradient(135deg,transparent 55%,#7a8a97 55%,#7a8a97 63%,transparent 63%,transparent 75%,#7a8a97 75%,#7a8a97 83%,transparent 83%);border-bottom-right-radius:8px;}
 .fc-pin-grip.l{left:0;cursor:nesw-resize;background:linear-gradient(225deg,transparent 55%,#7a8a97 55%,#7a8a97 63%,transparent 63%,transparent 75%,#7a8a97 75%,#7a8a97 83%,transparent 83%);border-bottom-left-radius:8px;}
 body.fc-pin-moving{user-select:none;}
@@ -95,7 +95,7 @@ body.fc-pin-moving{user-select:none;}
   .fc-detail td{white-space:nowrap;}
   .fc-detail th{font-size:10.5px;}
   .fc-pin-in{width:auto;}
-  .fc-pin-grip,.fc-pin-how{display:none;}
+  .fc-pin-grip,.fc-pin-edge,.fc-reset,.fc-pin-how{display:none;}
   .fc-pin{top:8px;left:8px;right:8px;padding:6px 8px;max-height:calc(100% - 16px);overflow:auto;box-sizing:border-box;z-index:1100;}
   .fc-trend-box.big{width:100%;}
   .fc-tt{font-size:10px;}
@@ -219,3 +219,12 @@ body.fc-pin-moving{user-select:none;}
   #view-forecast .jr-side.fold .jr-head b{writing-mode:vertical-rl;letter-spacing:.1em;font-size:14px;}
 }
 @media(max-width:760px){#view-forecast .jr-side.fold>:not(.jr-head){display:none;} #view-forecast .jr-side.fold{max-height:none;}}
+/* 2026-11-09 사용자: 창 왼쪽·오른쪽 옆면 = 가로 폭만(좌우 화살표). 옆면 가운데에 세로 손잡이 표시, 모서리(대각선)와 겹치지 않게 위아래를 비움 */
+.fc-pin-edge{position:absolute;top:14px;bottom:22px;width:10px;cursor:ew-resize;touch-action:none;z-index:4;}
+.fc-pin-edge.l{left:-6px;} .fc-pin-edge.r{right:-6px;}
+.fc-pin-edge::after{content:"";position:absolute;top:50%;left:2px;width:6px;height:40px;margin-top:-20px;border-radius:3px;background:#52677b;border:1px solid #fff;box-sizing:border-box;box-shadow:0 0 2px rgba(16,36,58,.4);}
+.fc-pin-edge:hover::after,body.fc-pin-moving .fc-pin-edge::after{background:#24405c;}
+/* 원래대로: × 왼쪽 */
+.fc-reset{position:absolute;top:-10px;right:18px;height:22px;padding:0 9px;border-radius:11px;border:1px solid #fff;background:#24405c;color:#fff;font-size:11px;font-weight:700;line-height:20px;cursor:pointer;z-index:3;box-shadow:0 1px 4px rgba(16,36,58,.35);white-space:nowrap;}
+.fc-reset:hover,.fc-reset:focus-visible{background:#3a6890;}
+@media(max-width:760px){.fc-mobile .fc-reset,.fc-mobile .fc-pin-edge{display:none;}}

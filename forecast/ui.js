@@ -189,6 +189,14 @@
     if (g.x != null) { box.style.bottom='auto'; box.style.right = 'auto'; box.style.left = Math.max(0, Math.min(g.x, mw - box.offsetWidth)) + 'px'; box.style.top = Math.max(0, Math.min(g.y, mh - box.offsetHeight)) + 'px'; }
     return sc;
   }
+  // 원래대로(2026-11-09 사용자): 그 창을 처음 크기·위치로(배율 기본·가로 폭·옮긴 자리 지움)
+  function resetBox(box) {
+    var geo = box.id === 'fc-daily' ? window.ForecastDaily.geo() : box.id === 'fc-tail' ? S.tailGeo : S.pinGeo, inner = box.querySelector('.fc-pin-in');
+    geo.scale = PIN_DEFAULT; geo.x = null; geo.y = null; delete geo.w;
+    box.style.left = box.style.top = box.style.right = box.style.bottom = ''; if (inner) inner.style.width = '';
+    if (box.id === 'fc-pin') savePinGeo();
+    applyPinGeo(); if (window.ForecastDaily) window.ForecastDaily.layout();
+  }
   function movePinBox(box,geo,x,y,w,h) {
     // 위치 이동은 위/아래 동시 지정을 피하고 크기·글자 배율을 다시 계산하지 않는다.
     box.style.right='auto';box.style.bottom='auto';
@@ -209,18 +217,18 @@
   }
   function pinDrag(e) {
     if (isPhone()) return;
-    // 옮기기: 표 왼쪽 항목 칸(th.lb)이나 창 테두리 여백을 끌기(2026-11-09 왼쪽 제목 칸을 없앤 뒤). 크기: 아래 모서리
-    var t = e.target, grip = t.closest && t.closest('.fc-pin-grip'), cl = t.classList || { contains: function () { return false; } };
+    // 옮기기: 표 왼쪽 항목 칸(th.lb)이나 창 테두리 여백을 끌기(2026-11-09 왼쪽 제목 칸을 없앤 뒤)
+    // 크기(2026-11-09 사용자): 창 왼쪽·오른쪽 옆면 = 글자 그대로 표 폭만(좌우 화살표), 아래 모서리 = 글자·표 배율(대각선 화살표)
+    var t = e.target, grip = t.closest && (t.closest('.fc-pin-grip') || t.closest('.fc-pin-edge')), cl = t.classList || { contains: function () { return false; } };
     var handle = t.closest && (t.closest('.fc-pin th.lb,.fc-tail th.lb,.fc-daily th.lb') || cl.contains('fc-pin') || cl.contains('fc-tail') || cl.contains('fc-daily') || cl.contains('fc-pin-in'));
     if (!grip && (!handle || t.closest('button'))) return;
-    var box = t.closest('.fc-pin,.fc-tail,.fc-daily'), geo = box.id === 'fc-daily' ? window.ForecastDaily.geo() : box.id === 'fc-tail' ? S.tailGeo : S.pinGeo, r = box.getBoundingClientRect(), mr = box.parentNode.getBoundingClientRect(), sx = e.clientX, sy = e.clientY, x0 = r.left - mr.left, y0 = r.top - mr.top, w0 = r.width, left = grip && grip.dataset.grip === 'l';
+    var box = t.closest('.fc-pin,.fc-tail,.fc-daily'), geo = box.id === 'fc-daily' ? window.ForecastDaily.geo() : box.id === 'fc-tail' ? S.tailGeo : S.pinGeo, r = box.getBoundingClientRect(), mr = box.parentNode.getBoundingClientRect(), sx = e.clientX, sy = e.clientY, x0 = r.left - mr.left, y0 = r.top - mr.top, w0 = r.width, left = !!grip && (grip.dataset.grip || grip.dataset.edge) === 'l', mode = grip ? (grip.dataset.edge ? 'w' : 'z') : null;
     ['fc-pin','fc-tail','fc-daily'].forEach(function(id){var el=$(id);if(el)el.style.zIndex=el===box?'802':'801';});
     geo.x = x0; geo.y = y0; e.preventDefault();
-    var inner0 = box.querySelector('.fc-pin-in'), z0 = parseFloat(inner0 && inner0.style.zoom) || geo.scale || 1, iw0 = inner0 ? inner0.offsetWidth : PIN_BODY, mode = null;
+    var inner0 = box.querySelector('.fc-pin-in'), z0 = parseFloat(inner0 && inner0.style.zoom) || geo.scale || 1, iw0 = inner0 ? inner0.offsetWidth : PIN_BODY;
     function mv(ev) {
       var dx = ev.clientX - sx, dy = ev.clientY - sy;
       if (!grip) { movePinBox(box,geo,x0+dx,y0+dy,w0,r.height); return; }
-      if (!mode) { if (Math.abs(dx) + Math.abs(dy) < 6) return; mode = Math.abs(dy) < Math.abs(dx) * 0.35 ? 'w' : 'z'; }      // 처음 움직인 방향으로 정함
       if (mode === 'w') {
         geo.w = Math.max(PIN_W_MIN, iw0 + (left ? -dx : dx) / z0);
         if (left) geo.x = 0;
@@ -268,9 +276,9 @@
     var box=$('fc-tail'); if (!box) return;
     if (!S.pin || S.tailClosed) { box.hidden=true; syncForecastMapSize(); return; }
     var d=S.tailData, k=S.pin.split(',');
-    box.innerHTML='<button class="fc-x fc-tail-x" type="button" aria-label="3시간 예보 닫기">×</button><div class="fc-pin-in"><div class="fc-tail-body">'+
+    box.innerHTML='<button type="button" class="fc-reset" aria-label="처음 크기·위치로">원래대로</button><button class="fc-x fc-tail-x" type="button" aria-label="3시간 예보 닫기">×</button><div class="fc-pin-in"><div class="fc-tail-body">'+
       (S.tailError?'<p>이후 예보를 불러오지 못했습니다. <button type="button" data-tail-retry>다시 받기</button></p>':!d?'<p role="status">이후 예보를 불러오는 중…</p>':d.status!=='ok'?'<p>최신 예보 자료가 없습니다.</p>':tailTables(d))+
-      '</div></div><span class="fc-pin-grip l" data-grip="l"></span><span class="fc-pin-grip r" data-grip="r"></span>';
+      '</div></div><span class="fc-pin-edge l" data-edge="l" aria-hidden="true"></span><span class="fc-pin-edge r" data-edge="r" aria-hidden="true"></span><span class="fc-pin-grip l" data-grip="l" aria-hidden="true"></span><span class="fc-pin-grip r" data-grip="r" aria-hidden="true"></span>';
     box.hidden=false;
     var legend=$('fc-legend'), near=$('fc-pin'), lh=legend?legend.offsetHeight:0;
     if(isPhone()) {
@@ -370,9 +378,9 @@
     if(S.tailData && S.tailData.status==='ok') { var hourly=window.ForecastSeries.hourlyAll(S.tailData);sr=hourly.series; start=hourly.start_at; }
     renderTail();
     var k = S.pin.split(','), g = S.grid[S.hq], c = g && g.cells ? g.cells.filter(function (x) { return x[0] === +k[0] && x[1] === +k[1]; })[0] : null;
-    box.innerHTML = '<button type="button" class="fc-x fc-pin-x" aria-label="1시간 예보 닫기">×</button><div class="fc-pin-in">' + trendBox(sr, start, true) +
+    box.innerHTML = '<button type="button" class="fc-reset" aria-label="처음 크기·위치로">원래대로</button><button type="button" class="fc-x fc-pin-x" aria-label="1시간 예보 닫기">×</button><div class="fc-pin-in">' + trendBox(sr, start, true) +
       '</div>' +
-      '<span class="fc-pin-grip l" data-grip="l" aria-hidden="true"></span><span class="fc-pin-grip r" data-grip="r" aria-hidden="true"></span>';
+      '<span class="fc-pin-edge l" data-edge="l" aria-hidden="true"></span><span class="fc-pin-edge r" data-edge="r" aria-hidden="true"></span><span class="fc-pin-grip l" data-grip="l" aria-hidden="true"></span><span class="fc-pin-grip r" data-grip="r" aria-hidden="true"></span>';
     box.hidden = !!S.nearClosed; applyPinGeo();
     if(window.ForecastDaily)window.ForecastDaily.sync(S.pin,cellName(+k[0],+k[1])+(c?' · '+(c[2]||[]).map(bname).join(', '):''),S.pinAt);
   }
@@ -564,6 +572,7 @@
     $('view-forecast').addEventListener('click', function (e) {
       var t = e.target, h = t.closest && t.closest('[data-fchq]'); if (h) { setHq(S.hq === h.dataset.fchq ? 'ALL' : h.dataset.fchq); return; }
       if (t.closest && t.closest('.fc-side-tog')) { toggleSide(); return; }
+      var rb = t.closest && t.closest('.fc-reset'); if (rb) { resetBox(rb.closest('.fc-pin,.fc-tail,.fc-daily')); return; }
       var b = t.closest && t.closest('[data-fcbr]'); if (b) { focusBranch(b.dataset.fcbr); return; }
       if (t.closest && t.closest('.fc-tail-x')) { S.tailClosed=true; renderTail(); scheduleTail(); return; }
       if (t.closest && t.closest('[data-tail-retry]')) { S.tailKey=null; ensureTail(); return; }

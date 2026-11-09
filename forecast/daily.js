@@ -113,9 +113,9 @@
   }
   function render(){
     var box=$('fc-daily');if(!box)return;var scroll=box.querySelector('.fc-scroll'),left=scroll?scroll.scrollLeft:0;
-    box.innerHTML='<button type="button" class="fc-x fc-daily-x" aria-label="일별 예보 닫기">×</button><div class="fc-pin-in"><div class="fc-daily-body">'+
+    box.innerHTML='<button type="button" class="fc-reset" aria-label="처음 크기·위치로">원래대로</button><button type="button" class="fc-x fc-daily-x" aria-label="일별 예보 닫기">×</button><div class="fc-pin-in"><div class="fc-daily-body">'+
       (D.data?table(D.data)+(D.error?'<p class="fc-daily-source">갱신 지연 <button type="button" data-daily-retry>다시 받기</button></p>':''):D.error?'<p>일별 예보를 불러오지 못했습니다. <button type="button" data-daily-retry>다시 받기</button></p>':'<p role="status">일별 예보를 불러오는 중…</p>')+
-      '</div></div><span class="fc-pin-grip l" data-grip="l"></span><span class="fc-pin-grip r" data-grip="r"></span>';
+      '</div></div><span class="fc-pin-edge l" data-edge="l" aria-hidden="true"></span><span class="fc-pin-edge r" data-edge="r" aria-hidden="true"></span><span class="fc-pin-grip l" data-grip="l" aria-hidden="true"></span><span class="fc-pin-grip r" data-grip="r" aria-hidden="true"></span>';
     layout();scroll=box.querySelector('.fc-scroll');if(scroll)scroll.scrollLeft=left;
   }
   function sync(key,name,selection){

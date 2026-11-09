@@ -290,10 +290,12 @@ def t_pin_move_resize(b):
     b1 = box(); check(abs(b1["x"] - (b0["x"] - 260)) <= 2 and abs(b1["y"] - (b0["y"] + 112)) <= 2 and abs(b1["width"] - b0["width"]) <= 1, f"표 왼쪽 항목 칸을 끌면 옮겨짐: {b0} → {b1}")
     # 가로로 늘리기: 왼쪽 위 그대로, 글자 크기 그대로 표만 넓어져 다음 칸이 더 보임
     n0 = J(p, "(() => { const s=document.querySelector('#fc-pin .fc-scroll'); return [...s.querySelectorAll('thead tr:last-child th:not(.lb)')].filter(t => t.getBoundingClientRect().right <= s.getBoundingClientRect().right + 1).length })()")
-    g = p.locator("#fc-pin .fc-pin-grip.r").bounding_box(); p.mouse.move(g["x"] + 8, g["y"] + 8); p.mouse.down(); p.mouse.move(g["x"] + 108, g["y"] + 8, steps=4); p.mouse.up(); p.wait_for_timeout(100)
+    check(J(p, "getComputedStyle(document.querySelector('#fc-pin .fc-pin-edge.r')).cursor") == 'ew-resize' and J(p, "getComputedStyle(document.querySelector('#fc-pin .fc-pin-grip.r')).cursor") == 'nwse-resize', '옆면 = 좌우 화살표, 모서리 = 대각선 화살표')
+    g = p.locator("#fc-pin .fc-pin-edge.r").bounding_box(); gx, gy = g["x"] + 5, g["y"] + g["height"] / 2
+    p.mouse.move(gx, gy); p.mouse.down(); p.mouse.move(gx + 50, gy + 30, steps=4); p.mouse.move(gx + 100, gy + 40, steps=4); p.mouse.up(); p.wait_for_timeout(100)      # 조금 비스듬히 끌어도 옆면은 가로 폭만
     b2 = box(); z = J(p, "+document.querySelector('.fc-pin-in').style.zoom")
     n1 = J(p, "(() => { const s=document.querySelector('#fc-pin .fc-scroll'); return [...s.querySelectorAll('thead tr:last-child th:not(.lb)')].filter(t => t.getBoundingClientRect().right <= s.getBoundingClientRect().right + 1).length })()")
-    check(abs(b2["x"] - b1["x"]) <= 2 and abs(b2["width"] - (b1["width"] + 100)) <= 3 and abs(z - 1.2) < 0.001 and abs(tdw()["width"] - w0["width"]) <= 1 and n1 > n0, f"2026-11-09: 가로로 늘리면 글자 그대로 표만 넓어짐 {b1} → {b2}, 배율 {z}, 보이는 칸 {n0}→{n1}")
+    check(abs(b2["x"] - b1["x"]) <= 2 and abs(b2["width"] - (b1["width"] + 100)) <= 3 and abs(z - 1.2) < 0.001 and abs(tdw()["width"] - w0["width"]) <= 1 and n1 > n0, f"2026-11-09: 옆면을 끌면 글자 그대로 표만 넓어짐 {b1} → {b2}, 배율 {z}, 보이는 칸 {n0}→{n1}")
     # 대각선으로 키우기: 표·글자도 커짐
     g = p.locator("#fc-pin .fc-pin-grip.r").bounding_box(); p.mouse.move(g["x"] + 8, g["y"] + 8); p.mouse.down(); p.mouse.move(g["x"] + 40, g["y"] + 40, steps=3); p.mouse.move(g["x"] + 80, g["y"] + 80, steps=3); p.mouse.up(); p.wait_for_timeout(100)
     b2 = box(); z = J(p, "+document.querySelector('.fc-pin-in').style.zoom")
@@ -318,8 +320,18 @@ def t_pin_move_resize(b):
     saved = J(p, "JSON.parse(localStorage.getItem('ss_fc_pin'))"); check(saved["scale"] >= 0.8 and saved["x"] is not None, f"이 브라우저에 기억: {saved}")
     g = p.locator("#fc-pin .fc-pin-grip.r").bounding_box(); p.mouse.move(g["x"] + 8, g["y"] + 8); p.mouse.down(); p.mouse.move(g["x"] - 3000, g["y"] - 3000, steps=4); p.mouse.up(); p.wait_for_timeout(100)
     z = J(p, "+document.querySelector('.fc-pin-in').style.zoom"); check(z >= 0.8 - 0.001, f"너무 작아지지 않음: {z}")
-    g = p.locator("#fc-pin .fc-pin-grip.r").bounding_box(); p.mouse.move(g["x"] + 8, g["y"] + 8); p.mouse.down(); p.mouse.move(g["x"] - 3000, g["y"] + 8, steps=4); p.mouse.up(); p.wait_for_timeout(100)
+    g = p.locator("#fc-pin .fc-pin-edge.r").bounding_box(); p.mouse.move(g["x"] + 5, g["y"] + g["height"] / 2); p.mouse.down(); p.mouse.move(g["x"] - 3000, g["y"] + g["height"] / 2, steps=4); p.mouse.up(); p.wait_for_timeout(100)
     iw = J(p, "document.querySelector('#fc-pin .fc-pin-in').offsetWidth"); check(iw >= 299, f"가로로도 너무 좁아지지 않음: {iw}")
+    # 원래대로: 세 창 모두 처음 크기·위치로
+    for root in ['#fc-pin', '#fc-tail']:
+        if not p.locator(root).is_visible(): continue
+        p.locator(root + ' .fc-reset').click(); p.wait_for_timeout(150)
+        rb = p.locator(root).bounding_box(); zz = J(p, f"+document.querySelector('{root} .fc-pin-in').style.zoom")
+        xb = p.locator(root + ' .fc-x').bounding_box(); rr = p.locator(root + ' .fc-reset').bounding_box()
+        check(abs(rb["width"] - 542) <= 4 and abs(zz - 1.2) < 0.001 and rr["x"] + rr["width"] <= xb["x"] + 2 and abs(rr["y"] - xb["y"]) <= 2, f"원래대로({root}): 처음 크기·배율, 단추는 × 왼쪽 {rb} {zz}")
+    check(abs(p.locator('#fc-pin').bounding_box()["x"] - b0["x"]) <= 2 and abs(p.locator('#fc-pin').bounding_box()["y"] - b0["y"]) <= 2, "원래대로: 처음 자리")
+    saved = J(p, "JSON.parse(localStorage.getItem('ss_fc_pin'))"); check(saved["x"] is None and "w" not in saved, f"원래대로 기억도 처음으로 {saved}")
+    g = p.locator("#fc-pin .fc-pin-grip.r").bounding_box(); p.mouse.move(g["x"] + 10, g["y"] + 10); p.mouse.down(); p.mouse.move(g["x"] - 30, g["y"] - 30, steps=4); p.mouse.up(); p.wait_for_timeout(100)
     # 새로 열어도 기억
     b8 = box(); p.reload(); p.wait_for_function("window.ForecastUI && ForecastUI._state().inited", timeout=60000)
     p.click(".tab-btn[data-tab=forecast]"); p.wait_for_timeout(800); p.click("#fc-tree [data-fchq='강원']"); p.wait_for_timeout(600); p.locator("#fc-tree [data-fcbr]").first.click(); p.wait_for_timeout(900)
