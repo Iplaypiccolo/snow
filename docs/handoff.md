@@ -44,6 +44,13 @@
 
 ## 기록 (최신이 맨 위)
 
+### 2026-11-09 · 커밋 (이 기록 커밋 하나) · 1시간·3시간 표를 날씨누리처럼(SQL89, 초단기 습도, 동시 수집)
+- `supabase/migrations/20261109_89_forecast_hourly_kma.sql`: 초단기 REH 수집(36개/발표), `forecast_cell_detail` 의 hourly_tail 을 받은 끝까지(정성 시각 sc·pc, quantity_end_at), 앞 6시각 습도는 초단기. 되돌린 시험: 1시간 값 76시각·양 끝 11/12 24시·응답 약 16.5KB·0.1~0.25초.
+- `forecast/series.js`: 3시간 칸을 시간별 값에서 날씨누리 규칙으로(기온·습도 그 시각, 확률 비 있으면 최고/없으면 평균, 강수·신적설 강도만). 1시간 표는 양 구간 끝까지(`hourlyAll`). `forecast/ui.js`: 3시간 머리글 = 시각 하나(자정 24), 행 이름·값.
+- `collect-forecast/core.mjs`: 초단기 첫 1개 뒤 3개씩 동시에 받기, 시험 목록에 REH. 시험 `tests/test_forecast_series.js` 다시 씀, `tests/test_collect_forecast.mjs`·`tests/test_forecast_ui.py`·`tests/_sb_mock.py` 고침.
+- 사용자 "적용해" 후 89 적용(파일과 같은 내용), `collect-forecast` v9 배포(배포본 내용 확인). 순서: 89 → 함수 → 화면(화면만 먼저면 3시간 표가 48시간까지만).
+— ✍ Claude Code 작성
+
 ### 2026-11-09 · 커밋 (이 기록 커밋 하나) · 일별 창 오늘 칸을 기상청처럼(SQL88, 초단기 SKY 수집)
 - 사용자 "나로 진행해줘" 후 `supabase/migrations/20261109_88_forecast_daily_today_vsrt.sql` 적용: 초단기 SKY 수집(30개/발표), `forecast_daily_cell` 오늘 칸은 지난 시각 제외·가까운 6시간 초단기 값, `forecast_version` d 에 초단기 완료 시각. 되돌린 시험 OK.
 - `collect-forecast` v8 배포(시험 목록 VSRT_VARS 에 PTY·SKY, 머리 설명). 저장 없는 시험 호출로 초단기 SKY 확인.

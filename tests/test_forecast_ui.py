@@ -479,17 +479,17 @@ def t_tail_separate(b):
     check(p.locator("#fc-pin").is_visible() and p.locator("#fc-tail").is_visible(), "별도 예보 창 두 개")
     check(p.locator("#fc-pin #fc-tail").count()==0, "한 창 안에 넣지 않음")
     check(p.locator('#fc-tail thead tr').count()==2 and p.locator('#fc-pin thead tr').count()==2,'날짜/시각 머리글 두 행')
-    check('/' in p.locator('#fc-tail thead tr').first.inner_text() and '~' in p.locator('#fc-tail thead tr').last.inner_text(),'일자 위·시간 범위 아래')
+    check('/' in p.locator('#fc-tail thead tr').first.inner_text() and '~' not in p.locator('#fc-tail thead tr').last.inner_text(),'89: 일자 위·시각 하나 아래(기상청처럼 03·06…)')
     check(p.locator('#fc-tail table').count()==1 and p.locator('#fc-pin table').count()==1,'두 표 각각 한 줄')
     hum3=p.locator('#fc-tail tbody tr').last
-    check(hum3.locator('th').inner_text().startswith('습도') and '70' in hum3.locator('td').all_inner_texts(),'85: 3시간 표 맨 아래 습도(평균)')
+    check(hum3.locator('th').inner_text().startswith('습도') and '85' in hum3.locator('td').all_inner_texts(),'89: 3시간 표 맨 아래 습도(그 시각 값)')
     hum1=p.locator('#fc-pin tbody tr').last
     check(hum1.locator('th').inner_text().startswith('습도') and '85' in hum1.locator('td').all_inner_texts(),'85: 1시간 표 기온 아래 습도')
     widths=J(p,"Array.from(document.querySelectorAll('.fc-scroll')).map(x=>[x.scrollWidth,x.clientWidth])")
     check(all(a>b for a,b in widths),'두 표 가로 스크롤')
     labels=p.locator('#fc-tail thead tr').last.locator('th:not(.lb)').all_inner_texts()
     check(len(labels)>8,'가까운24시간 포함한 정량 구간')
-    check('22~24' in labels and all('시' not in x.split('\n')[0] for x in labels),'자정 끝24 표기·시 단위 생략')
+    check('24' in labels and all(x.split('\n')[0] in('03','06','09','12','15','18','21','24') for x in labels[1:]),'89: 3시간 칸 = 그 시각 하나(자정은 24)·시 단위 생략 '+str(labels[:4]))
     dates=p.locator('#fc-tail thead tr').first.locator('th:not(.lb)').all_inner_texts()
     check(all('~' not in x for x in dates),'시작 날짜 하나만 표시')
     for root in ('#fc-pin','#fc-tail'):
@@ -501,10 +501,12 @@ def t_tail_separate(b):
     check(not clip,'3시간 칸 글자 안 잘림')
 
     amounts=p.locator('#fc-tail tbody tr').nth(0).locator('td').all_inner_texts()+p.locator('#fc-tail tbody tr').nth(1).locator('td').all_inner_texts()
-    check('-' not in amounts and '많은 눈' in amounts and '강한 비' in amounts,'먼 정성 칸도 강도 표현으로 유지(영하 기온 유지)')
+    check('-' not in amounts and '많은 눈' in amounts and '강한비' in amounts and '약한비' in amounts,'89: 신적설·강수는 강도만(가까운 양도 강도로, 먼 칸은 기상청 등급)')
+    check(not any(x.replace('.','').replace('~','').isdigit() for x in amounts),'89: 3시간 표에 mm·cm 양 없음')
     check('강설 없음' not in amounts and '강수 없음' not in amounts and '' in amounts,'정성0은 다른 칸처럼 빈칸(2026-11-09)')
     check(p.locator('#fc-tail .fc-qual-label').count()==0 and '정성' not in p.locator('#fc-tail').inner_text(),'정성예보안내단어제거')
-    check(p.locator('#fc-tail tbody tr').nth(0).locator('td.fc-qual').count()==3 and p.locator('#fc-tail tbody tr').nth(2).locator('td.fc-qual').count()==0,'적설강수만정성·확률기온숫자유지')
+    n3=p.locator('#fc-tail tbody tr').nth(0).locator('td').count()
+    check(p.locator('#fc-tail tbody tr').nth(0).locator('td.fc-qual').count()==n3 and p.locator('#fc-tail tbody tr').nth(2).locator('td.fc-qual').count()==0,'신적설·강수만 강도, 확률·기온은 숫자')
     p.screenshot(path="../../outputs/72_desktop.png")
     p.locator(".fc-tail-x").click()
     check(not p.locator("#fc-tail").is_visible() and p.locator("#fc-pin").is_visible(), "이후 창만 닫기")
@@ -572,6 +574,15 @@ def t_right_dock_and_tail_drag(b):
 
 TESTS += [t_right_dock_and_tail_drag]
 
+def cut_hourly(h,n):
+    """89: 시간별 값(hourly_tail)을 앞 n시각까지만 — 수집 중 일부만 도착한 상태. 3시각 늘리면 3시간 칸이 꼭 하나 늘어남"""
+    import copy,datetime as dt
+    h=copy.deepcopy(h); st=dt.datetime.fromisoformat(h['start_at'])
+    h['series']={k:(v[:n] if isinstance(v,list) else v) for k,v in h['series'].items()}
+    h['end_at']=(st+dt.timedelta(hours=n)).isoformat()
+    qe=dt.datetime.fromisoformat(h['quantity_end_at']); h['quantity_end_at']=min(qe,st+dt.timedelta(hours=n-1)).isoformat()
+    return h
+
 def tail_refresh_page(b):
     import copy,json
     p,m=open_page(b)
@@ -579,8 +590,8 @@ def tail_refresh_page(b):
     J(p,f"(() => {{SSOpenForecast('{d}');return null}})()")
     p.wait_for_function("document.querySelector('#fc-tail table')")
     data=J(p,f'{S}.tailData')
-    complete=copy.deepcopy(data['tail']['bins'])
-    data['collecting']=True;data['tail']['bins']=complete[:2]
+    complete=copy.deepcopy(data['hourly_tail'])
+    data['collecting']=True;data['hourly_tail']=cut_hourly(complete,27)
     state={'data':data,'calls':0,'fail':False,'ver':'c1','vcalls':0,'vfail':False}
     def reply(route):
         state['calls']+=1
@@ -610,7 +621,7 @@ def t_tail_progressive_refresh(b):
     v0=state['vcalls']
     p.clock.fast_forward(180000); wait_calls(p,state,v0+1,'vcalls')
     check(state['calls']==1 and state['vcalls']==v0+1,'83: 예보가 그대로면 작은 확인만 하고 다시 받지 않음')
-    state['data']['tail']['bins']=complete[:3];state['ver']='c2'
+    state['data']['hourly_tail']=cut_hourly(complete,30);state['ver']='c2'
     p.clock.fast_forward(180000)
     p.wait_for_function(f"document.querySelectorAll('#fc-tail tbody tr:first-child td').length==={before+1}")
     check(state['calls']==2,'하루치가 아닌 다음 한 칸 도착 시 자동 추가')
@@ -648,7 +659,7 @@ def t_tail_refresh_failure_keeps_data(b):
     p.clock.fast_forward(180000)
     p.wait_for_function('ForecastUI._state().tailRetry===true')
     check(p.locator('#fc-tail tbody').inner_text()==before,'갱신 실패 때 기존 준비 자료 유지')
-    state['fail']=False;state['data']['tail']['bins']=complete[:3]
+    state['fail']=False;state['data']['hourly_tail']=cut_hourly(complete,30)
     p.clock.fast_forward(180000)
     p.wait_for_function('ForecastUI._state().tailRetry===false')
     check(state['calls']==3,'실패 후 다음 주기에 재시도')
@@ -692,17 +703,20 @@ TESTS += [t_tail_progressive_refresh,t_tail_refresh_visibility,t_tail_refresh_fa
 
 def t_tail_code_cell_arrives(b):
     p,state,complete=tail_refresh_page(b)
-    state['data']['tail']['bins']=complete[:5];state['ver']='c2'
+    state['data']['hourly_tail']=cut_hourly(complete,24);state['ver']='c2'
     p.clock.fast_forward(180000)
-    p.wait_for_function('ForecastUI._state().tailData.tail.bins.length===5')
+    p.wait_for_function('ForecastUI._state().tailData.hourly_tail.series.t.length===24')
     before=p.locator('#fc-tail tbody tr').first.locator('td').count()
-    state['data']['tail']['bins']=complete[:6];state['ver']='c3'
+    state['data']['hourly_tail']=cut_hourly(complete,27);state['ver']='c3'
     p.clock.fast_forward(180000)
     p.wait_for_function(f"document.querySelectorAll('#fc-tail tbody tr:first-child td').length==={before+1}")
     rows=p.locator('#fc-tail tbody tr')
-    check(rows.nth(0).locator('td').last.inner_text()=='보통 눈','먼 칸의 눈 강도 표현')
-    check(rows.nth(1).locator('td').last.inner_text()=='비','강수 코드2를2mm로 더하지 않음')
-    check(rows.nth(2).locator('td').last.inner_text()=='80' and rows.nth(3).locator('td').last.inner_text()=='-2','먼 칸 확률/기온 유지')
+    last=J(p,f"(() => {{ const b=ForecastSeries.combine({S}.tailData,0).at(-1); return [ForecastSeries.intensity(b.snow_code,true),ForecastSeries.intensity(b.pcp_code,false),b.snow_code,b.pcp_code]; }})()")
+    check(rows.nth(0).locator('td').last.inner_text()==last[0] and last[2] in (1,2),'먼 칸의 눈 강도 표현 '+str(last))
+    check(rows.nth(1).locator('td').last.inner_text()==last[1] and last[3] in (1,2,3),'강수 등급을 mm 로 더하지 않고 강도로 '+str(last))
+    lb=J(p,f"(() => {{ const b=ForecastSeries.combine({S}.tailData,0).at(-1); return [b.pop,b.tmp,Date.parse(b.last_at)===Date.parse(b.slot_at)]; }})()")
+    got=[rows.nth(i).locator('td').last.inner_text() for i in (2,3)]
+    check(got[0]=='80' and (got[1]=='-2' if lb[2] else got[1]=='-'),'먼 칸 확률 유지·기온은 그 칸 시각 값(아직 안 온 시각이면 -) '+str(got+lb))
     check(p.locator('#fc-tail [title]').count()==0,'마우스설명제거')
 
 TESTS += [t_tail_code_cell_arrives]

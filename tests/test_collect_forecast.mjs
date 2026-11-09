@@ -62,6 +62,19 @@ await test('초단기: 분까지 적은 발표 시각, 발표 다음 정시부�
   assert.ok(w.fetched[0].startsWith(VSRT_URL + '?tmfc=202611030920&tmef=2026110310&vars=T1H&authKey=')); assert.ok(w.fetched[17].includes('&tmef=2026110315&vars=POP&'));
   assert.deepEqual(w.vputs[0][3], [127060, 131092]); assert.equal(w.puts.length, 0); assert.ok(!JSON.stringify(r.j).includes(w.key));
 });
+await test('초단기(89): 첫 1개는 혼자, 그다음은 3개씩 동시에 받고 저장은 목록 차례대로', async () => {
+  const w = vworld(); let live = 0, peak = 0; const starts = [];
+  w.deps.fetchText = async (u) => { w.fetched.push(u); live++; peak = Math.max(peak, live); starts.push(live); await new Promise((r) => setTimeout(r, 3)); live--; return { status: 200, text: G }; };
+  const r = await call(w, { token: 'tok' }, '{"vsrt":true}');
+  assert.equal(r.j.done, true); assert.equal(w.fetched.length, 18); assert.equal(peak, 3); assert.equal(starts[0], 1); assert.deepEqual(starts.slice(1, 4), [1, 2, 3]);
+  const want = w.fetched.map((u) => u.match(/tmef=(\d+)&vars=(\w+)/).slice(1).reverse().join(' '));
+  assert.deepEqual(w.vputs.map((x) => x[1] + ' ' + kstHour(x[2])), want);
+});
+await test('초단기(89): 같이 받은 것 중 하나가 끝내 실패하면 그 앞까지만 저장하고 실패 기록', async () => {
+  const w = vworld(); w.resp = (u) => (u.includes('tmef=2026110310&vars=POP') ? { status: 504, text: '' } : { status: 200, text: G });
+  const r = await call(w, { token: 'tok' }, '{"vsrt":true}');
+  assert.equal(w.vputs.length, 2); assert.ok(w.vfails[0].includes('504')); assert.equal(r.j.ok, false); assert.equal(r.j.hours, 2);
+});
 await test('초단기: 아직 안 나온 발표분은 실패가 아니라 한 칸 앞 발표분을 받음', async () => {
   const w = vworld(); w.resp = (u) => (u.includes('tmfc=202611030920') ? NOT_READY : { status: 200, text: G });
   const r = await call(w, { token: 'tok' }, '{"vsrt":true}');
@@ -100,6 +113,7 @@ await test('초단기 시험 호출: 저장 없이 요약만, 다른 종류는 �
   const w = vworld(); const r = await call(w, { token: 'tok' }, '{"vsrt":true,"probe":"T1H"}');
   assert.equal(r.j.probe, 'T1H'); assert.equal(w.fetched.length, 1); assert.ok(w.fetched[0].startsWith(VSRT_URL)); assert.equal(w.vputs.length, 0); assert.equal(w.begun.length, 0);
   assert.equal((await call(w, { token: 'tok' }, '{"vsrt":true,"probe":"SNO"}')).status, 400);
+  assert.equal((await call(w, { token: 'tok' }, '{"vsrt":true,"probe":"REH"}')).j.probe, 'REH');      // 89: 습도도 받아 볼 수 있음
 });
 
 await test('권한: 토큰 없으면 401(기상청에 묻지 않음)', async () => {

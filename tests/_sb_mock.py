@@ -310,15 +310,14 @@ class Mock:
                     a = b + dt.timedelta(hours=1)
                 payload={"status":"ok", "upper":{"series":(dict(c[7],h=[60+i for i in range(24)]) if self.fc_humidity and isinstance(c[7],dict) else c[7]), "start_at":self.fc_start,"end_at":self.fc_end}, "tail":{"bins":bins}}
                 if tbl == 'forecast_cell_detail':
-                    # 별도의 가짜 시간별 원값. 실제 코드는3시간합계를나누지않는다.
-                    hourly={'s':[],'p':[],'t':[],'r':[],'sq':[],'pq':[],'vn':0}
-                    for i in range(24):
-                        t=start+dt.timedelta(hours=i)
-                        source=next((b for b in bins if dt.datetime.fromisoformat(b['first_at'])<=t<=dt.datetime.fromisoformat(b['last_at'])),None)
-                        numeric=source is not None and source['amount_kind']=='numeric'
-                        for k,v in [('s',1 if numeric else None),('p',2 if numeric else None),('t',-2 if source else None),('r',80 if source else None),('sq',False if numeric else None),('pq',False if numeric else None)]:hourly[k].append(v)
-                    if self.fc_humidity: hourly['h']=[85]*24
-                    payload['hourly_tail']={'start_at':start.isoformat(),'end_at':(start+dt.timedelta(hours=24)).isoformat(),'series':hourly}
+                    # 89: 25시간째부터 받은 끝까지 1시간 값. 앞 24시각은 양(눈 1cm·비 2mm), 그 뒤 12시각은 기상청 강도 등급(3시간 칸마다 눈 1·2·0, 비 2·3·0)
+                    hourly={'s':[],'p':[],'t':[],'r':[],'sq':[],'pq':[],'sc':[],'pc':[],'vn':0}
+                    kst=dt.timezone(dt.timedelta(hours=9))
+                    for i in range(36):
+                        t=start+dt.timedelta(hours=i); q=i<24; g=((t.astimezone(kst).hour-1)%24)//3%3
+                        for k,v in [('s',1 if q else None),('p',2 if q else None),('t',-2),('r',80),('sq',False if q else None),('pq',False if q else None),('sc',None if q else [1,2,0][g]),('pc',None if q else [2,3,0][g])]:hourly[k].append(v)
+                    if self.fc_humidity: hourly['h']=[85]*36
+                    payload['hourly_tail']={'start_at':start.isoformat(),'end_at':(start+dt.timedelta(hours=36)).isoformat(),'quantity_end_at':(start+dt.timedelta(hours=23)).isoformat(),'series':hourly}
                 return send(200,payload)
             if tbl == "forecast_grid" and "/rpc/" in path:
                 if not self.usable(u): return send(401, {"message": "login"})
