@@ -1,4 +1,5 @@
 // 일별 보강 전용. 기존 시간별 수집·완료 판정에는 쓰지 않는다.
+// 2026-11-09(84·85): sky:true 이면 하늘 상태(SKY)와 습도(REH, %)도 받음 — 일별 창 오전/오후 날씨, 1시간·3시간 표 습도
 import { GRID_URL, NX, NY, kstHour } from '../collect-forecast/core.mjs';
 const H=3600000,MAX_BYTES=2097152,BUDGET=85000;
 const reply=(status,body)=>new Response(JSON.stringify(body),{status,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'}});
@@ -6,7 +7,7 @@ const fail=code=>{throw new Error(code);};
 const hour=s=>typeof s==='string'&&Number.isFinite(Date.parse(s))&&Date.parse(s)%H===0;
 
 export function parseGrid(text,kind,cells){
-  if(!['SKY','TMN','TMX'].includes(kind))fail('bad_grid');
+  if(!['SKY','TMN','TMX','REH'].includes(kind))fail('bad_grid');
   if(typeof text!=='string'||new TextEncoder().encode(text).length>MAX_BYTES)fail('bad_grid');
   const tokens=text.split(/[\s,]+/).filter(s=>s!=='');
   if(tokens.length!==NX*NY)fail('bad_grid');
@@ -18,7 +19,7 @@ export function parseGrid(text,kind,cells){
   if(values.every(n=>n===0)||values.every(n=>n<=-90))return{empty:true,values:null};
   for(const n of values){
     if(n<=-90)continue;
-    if(kind==='SKY'?![0,1,3,4].includes(n):n>70)fail('bad_grid');
+    if(kind==='SKY'?![0,1,3,4].includes(n):kind==='REH'?(n<0||n>100):n>70)fail('bad_grid');
   }
   return{empty:false,values:cells.map(([nx,ny])=>{
     const n=values[(ny-1)*NX+nx-1];return n<=-90||(kind==='SKY'&&n===0)?null:n;
@@ -26,7 +27,7 @@ export function parseGrid(text,kind,cells){
 }
 
 function validPlan(plan,sky,now){
-  if(!plan||typeof plan!=='object'||!Array.isArray(plan.missing)||plan.missing.length>150)return false;
+  if(!plan||typeof plan!=='object'||!Array.isArray(plan.missing)||plan.missing.length>300)return false;
   if(!plan.missing.length)return true;
   if(plan.done||plan.waiting||!hour(plan.tmfc)||Date.parse(plan.tmfc)>now+300000||Date.parse(plan.tmfc)<now-48*H
     ||![2,5,8,11,14,17,20,23].includes(+kstHour(plan.tmfc).slice(8))
@@ -40,7 +41,7 @@ function validPlan(plan,sky,now){
   for(const j of plan.missing){
     if(!Array.isArray(j)||j.length!==2)return false;
     const[v,at]=j;
-    if(!['TMN','TMX',...(sky?['SKY']:[])].includes(v)||!hour(at)||Date.parse(at)<=Date.parse(plan.tmfc)||Date.parse(at)>Date.parse(plan.tmfc)+120*H
+    if(!['TMN','TMX',...(sky?['SKY','REH']:[])].includes(v)||!hour(at)||Date.parse(at)<=Date.parse(plan.tmfc)||Date.parse(at)>Date.parse(plan.tmfc)+120*H
       ||(v==='TMN'&&kstHour(at).slice(8)!=='06')||(v==='TMX'&&kstHour(at).slice(8)!=='15')||jobs.has(v+'|'+at))return false;
     jobs.add(v+'|'+at);
   }

@@ -2,7 +2,7 @@
    2026-11-09(마이그레이션 83): 일별 자료는 격자별로 기억하고, 열려 있는 동안 10분마다 forecast_version 의 d 만 확인해 바뀐 때만 다시 받음 */
 (function(){
   'use strict';
-  var D={key:null,seq:0,data:null,error:false,closed:false,tab:'hourly',timer:null,busy:0,geo:{scale:1,x:null,y:null},ver:null,cache:{}};
+  var D={key:null,seq:0,data:null,error:false,closed:false,tab:'hourly',timer:null,busy:0,geo:{scale:1.2,x:null,y:null},ver:null,cache:{}};
   var ids=['fc-pin','fc-tail','fc-daily'],tabs=['hourly','three','daily'];
   function $(id){return document.getElementById(id);}
   function phone(){return window.matchMedia('(max-width:760px)').matches;}
@@ -96,6 +96,13 @@
       panels.forEach(function(p){p.el.style.maxHeight='none';p.el.style.bottom='auto';p.inner=p.el.querySelector('.fc-pin-in');p.inner.style.zoom=p.geo.scale;total+=p.el.offsetHeight;overhead+=p.el.offsetHeight-p.inner.getBoundingClientRect().height;});
       var legend=$('fc-legend'),room=root.clientHeight-20-(legend?legend.offsetHeight:0)-Math.max(0,panels.length-1)*8;
       var factor=Math.min(1,Math.max(0.1,(room-overhead-2)/Math.max(1,total-overhead))),top=10;
+      // 2026-11-09: 창 기본 배율 1.2 — 폭도 지도 왼쪽 여유(최대 160px)를 남기게, 줄 높이 반올림으로 넘치면 한 번 더 줄임
+      var wide=Math.max.apply(null,panels.map(function(p){return p.el.offsetWidth;}).concat([1])),wroom=root.clientWidth-Math.min(160,root.clientWidth*0.25)-14;
+      factor=Math.min(factor,Math.max(0.1,wroom/Math.max(1,wide-14)));      // ui.js applyBoxGeo 와 같은 폭 기준
+      for(var pass=0;pass<3;pass++){
+        var used=0;panels.forEach(function(p){p.inner.style.zoom=p.geo.scale*factor;used+=p.el.offsetHeight;});
+        if(used<=room-2)break;factor*=Math.max(0.5,(room-2-overhead)/Math.max(1,used-overhead));
+      }
       panels.forEach(function(p){p.inner.style.zoom=p.geo.scale*factor;
         if(p.geo.x==null){p.el.style.left='auto';p.el.style.right='10px';p.el.style.top=top+'px';}
         else{p.el.style.left=Math.max(0,Math.min(p.geo.x,root.clientWidth-p.el.offsetWidth))+'px';p.el.style.right='auto';p.el.style.top=Math.max(0,Math.min(p.geo.y,root.clientHeight-p.el.offsetHeight-10))+'px';}

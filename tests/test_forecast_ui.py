@@ -149,7 +149,7 @@ def t_pin_chart(b):
           "범례: 체크박스(적설·강수·확률·기온) + 적설량 색띠만: " + leg.inner_text().replace("\n", " "))
     check([leg.locator(f"[data-fcshow={k}]").is_checked() for k in "spot"] == [True, False, False, True], "체크박스 기본 = 적설·기온")
     prow = [r.locator("th.lb").inner_text() for r in pin0.locator("table.fc-t1").first.locator("tbody tr").all()]
-    check(len(prow) == 4 and prow[2].startswith("확률") and pin0.locator(".fc-tt-sum").count()==0, f"고정 창 표의 강수확률 줄·합계 설명 제거: {prow}")
+    check(len(prow) == 5 and prow[2].startswith("확률") and prow[4].startswith("습도") and pin0.locator(".fc-tt-sum").count()==0, f"고정 창 표의 강수확률 줄·합계 설명 제거, 85 습도 줄: {prow}")
     mine = [c for c in m.fc_cells if d in c[2]]; hot = [c for c in mine if max(c[3], c[10] or 0) > 0 or max(c[4], c[9] or 0) > 0]
     check(p.locator("#fmap .fc-label.hot").count() == len(hot) and p.locator("#fmap .fc-label.calm").count() == len(mine) - len(hot) and len(hot) > 0, f"지도 칸: 적설·강수가 있는 칸만 크게({len(hot)}칸), 나머지는 흐리게")
     lab = p.locator("#fmap .fc-label").first
@@ -167,7 +167,7 @@ def t_pin_chart(b):
     check(pin.locator("svg").count() == 0 and pin.locator("table.fc-t1").count() == 1, "고정 창:24개 시각 한 표")
     h1 = [x.split("\n")[0] for x in pin.locator("table.fc-t1").first.locator("thead tr").last.locator("th:not(.lb)").all_inner_texts()]
     check(len(h1) == 48 and all(int(h1[i].replace("시", "")) == (int(h1[0].replace("시", "")) + i) % 24 for i in range(48)), f"1시간 표 머리글48칸 {h1}")
-    pb = pin.locator(".fc-trend-box").bounding_box(); check(pb and 350 <= pb["width"] <= 400, f"왼쪽 제목을 제외한 촘촘한 표 폭: {pb and pb['width']}")
+    pb = pin.locator(".fc-trend-box").bounding_box(); check(pb and 420 <= pb["width"] <= 480, f"왼쪽 제목을 제외한 촘촘한 표 폭(배율 1.2): {pb and pb['width']}")
     check(J(p, f"(() => {{ const l = {S}.cells.getLayers().find(l => l.getLatLngs && l.options.weight === 4); return !!l }})()"), "고정한 격자는 굵은 테두리")
     p.wait_for_timeout(350); J(p, f"(() => {{ {S}.map.fire('click', {{ latlng: {S}.map.getCenter() }}); return null }})()"); p.wait_for_timeout(200)
     check(not p.locator("#fc-pin").is_visible() and J(p, f"{S}.pin") is None, "지도 아무 데나 누르면 닫힘")
@@ -280,7 +280,7 @@ def t_pin_move_resize(b):
     box = lambda: p.locator("#fc-pin").bounding_box()
     tdw = lambda: p.locator(".fc-pin .fc-tt td").first.bounding_box()
     b0 = box(); w0 = tdw()
-    check(abs(b0["width"] - 454) <= 3, f"세 창을 위한 촘촘한 기본 크기: {b0}")
+    check(abs(b0["width"] - 542) <= 4, f"세 창을 위한 기본 크기(2026-11-09 20% 크게): {b0}")
     # 옮기기
     h = p.locator("#fc-pin .fc-pin-head").bounding_box(); p.mouse.move(h["x"] + 60, h["y"] + 8); p.mouse.down(); p.mouse.move(h["x"] - 200, h["y"] + 120, steps=4); p.mouse.up(); p.wait_for_timeout(100)
     b1 = box(); check(abs(b1["x"] - (b0["x"] - 260)) <= 2 and abs(b1["y"] - (b0["y"] + 112)) <= 2 and abs(b1["width"] - b0["width"]) <= 1, f"제목을 끌면 옮겨짐: {b0} → {b1}")
@@ -479,6 +479,10 @@ def t_tail_separate(b):
     check(p.locator('#fc-tail thead tr').count()==2 and p.locator('#fc-pin thead tr').count()==2,'날짜/시각 머리글 두 행')
     check('/' in p.locator('#fc-tail thead tr').first.inner_text() and '~' in p.locator('#fc-tail thead tr').last.inner_text(),'일자 위·시간 범위 아래')
     check(p.locator('#fc-tail table').count()==1 and p.locator('#fc-pin table').count()==1,'두 표 각각 한 줄')
+    hum3=p.locator('#fc-tail tbody tr').last
+    check(hum3.locator('th').inner_text().startswith('습도') and '70' in hum3.locator('td').all_inner_texts(),'85: 3시간 표 맨 아래 습도(평균)')
+    hum1=p.locator('#fc-pin tbody tr').last
+    check(hum1.locator('th').inner_text().startswith('습도') and '85' in hum1.locator('td').all_inner_texts(),'85: 1시간 표 기온 아래 습도')
     widths=J(p,"Array.from(document.querySelectorAll('.fc-scroll')).map(x=>[x.scrollWidth,x.clientWidth])")
     check(all(a>b for a,b in widths),'두 표 가로 스크롤')
     labels=p.locator('#fc-tail thead tr').last.locator('th:not(.lb)').all_inner_texts()

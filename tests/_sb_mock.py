@@ -97,6 +97,7 @@ class Mock:
         _ga = _json.load(open(_os.path.join(_os.path.dirname(__file__), "..", "data", "grid_assign.json"), encoding="utf-8"))
         _iss = (_dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
         self.fc_issued = _iss.isoformat(); self.fc_start = (_iss + _dt.timedelta(hours=2)).isoformat(); self.fc_end = (_iss + _dt.timedelta(hours=26)).isoformat()
+        self.fc_humidity = True   # 85: 격자 창 습도(단기 REH)
         # 격자 = [nx, ny, 지사들, 적설, 강수, 최저기온, 최저 시각, 추이{s,p,t,r,vn,pq,sq}, 최고 강수확률, 강수 범위 위쪽, 적설 범위 위쪽] (마이그레이션 34·42·60·62)
         #  적설·강수는 정수(기상청 격자 값). 적설이 있고 강수 0 인 칸 = 12시 '~1mm'(pq), 강수가 있고 적설 0 인 칸 = 14시 '~1cm'(sq) → 범위 위쪽 +1
         def _cell(c):
@@ -305,9 +306,9 @@ class Mock:
                     b = dt.datetime.fromtimestamp(((int(a.timestamp())-3600)//10800)*10800+10800, a.tzinfo)
                     expected = int((b-a).total_seconds()/3600)+1
                     hours = expected-1 if i==0 and expected>1 else expected
-                    bins.append({"first_at": a.isoformat(), "last_at": b.isoformat(), "hours": hours, "expected_hours": expected, "partial": hours<3, "snow": 3 if i<5 else None, "snow_hi": 4 if i<5 else None, "pcp": 6 if i<5 else None, "pcp_hi": 6 if i<5 else None, "tmin": -2, "pop": 80, "amount_kind":"numeric" if i<5 else "code", "quantity_hours":hours if i<5 else 0, "code_hours":0 if i<5 else hours, "snow_code":None if i<5 else [1,2,0][i-5], "pcp_code":None if i<5 else [2,3,0][i-5]})
+                    bins.append({"reh": 70.0, "reh_n": hours, "first_at": a.isoformat(), "last_at": b.isoformat(), "hours": hours, "expected_hours": expected, "partial": hours<3, "snow": 3 if i<5 else None, "snow_hi": 4 if i<5 else None, "pcp": 6 if i<5 else None, "pcp_hi": 6 if i<5 else None, "tmin": -2, "pop": 80, "amount_kind":"numeric" if i<5 else "code", "quantity_hours":hours if i<5 else 0, "code_hours":0 if i<5 else hours, "snow_code":None if i<5 else [1,2,0][i-5], "pcp_code":None if i<5 else [2,3,0][i-5]})
                     a = b + dt.timedelta(hours=1)
-                payload={"status":"ok", "upper":{"series":c[7], "start_at":self.fc_start,"end_at":self.fc_end}, "tail":{"bins":bins}}
+                payload={"status":"ok", "upper":{"series":(dict(c[7],h=[60+i for i in range(24)]) if self.fc_humidity and isinstance(c[7],dict) else c[7]), "start_at":self.fc_start,"end_at":self.fc_end}, "tail":{"bins":bins}}
                 if tbl == 'forecast_cell_detail':
                     # 별도의 가짜 시간별 원값. 실제 코드는3시간합계를나누지않는다.
                     hourly={'s':[],'p':[],'t':[],'r':[],'sq':[],'pq':[],'vn':0}
@@ -316,6 +317,7 @@ class Mock:
                         source=next((b for b in bins if dt.datetime.fromisoformat(b['first_at'])<=t<=dt.datetime.fromisoformat(b['last_at'])),None)
                         numeric=source is not None and source['amount_kind']=='numeric'
                         for k,v in [('s',1 if numeric else None),('p',2 if numeric else None),('t',-2 if source else None),('r',80 if source else None),('sq',False if numeric else None),('pq',False if numeric else None)]:hourly[k].append(v)
+                    if self.fc_humidity: hourly['h']=[85]*24
                     payload['hourly_tail']={'start_at':start.isoformat(),'end_at':(start+dt.timedelta(hours=24)).isoformat(),'series':hourly}
                 return send(200,payload)
             if tbl == "forecast_grid" and "/rpc/" in path:

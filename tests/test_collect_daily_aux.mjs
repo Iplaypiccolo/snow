@@ -52,6 +52,14 @@ await test('파일미제공/형식오류를빈성공으로저장안함',async()=
 await test('국가전체0만empty로저장',async()=>{const w=world({queue:[{status:200,text:matrix(0).join(',')},{status:200,text:grid(9,5)}]});const r=await run(w);assert(r.ok);assert.equal(r.empty,1);assert.deepEqual(w.puts[0].slice(3),[null,true]);});
 await test('DB저장실패후더받지않음',async()=>{const w=world();w.deps.put=async()=>false;assert.equal((await run(w)).error,'store_failed');assert.equal(w.calls.length,1);});
 await test('사용량기록실패가저장성공을뒤집지않음',async()=>{const w=world();w.deps.usage=async()=>{throw Error(w.key);};const r=await run(w);assert(r.ok&&r.done);assert.equal(r.usage.saved,false);});
+await test('85: 습도(REH) 0~100%만 허용, 결측 null',()=>{
+ assert.deepEqual(parseGrid(grid(0,100),'REH',cells).values,[0,100]);assert.deepEqual(parseGrid(grid(-99,55),'REH',cells).values,[null,55]);
+ assert.throws(()=>parseGrid(grid(101,5),'REH',cells),/bad_grid/);assert.throws(()=>parseGrid(grid(-5,5),'REH',cells),/bad_grid/);
+});
+await test('85: 습도도 sky:true 일 때만 수집',async()=>{
+ const w=world({jobs:[['REH',MIN]],queue:[{status:200,text:grid(80,60)}]});assert.equal((await run(w)).error,'bad_plan');assert.equal(w.calls.length,0);
+ const yes=world({jobs:[['SKY',MIN],['REH',MIN]],queue:[{status:200,text:grid(1,4)},{status:200,text:grid(80,60)}]});const r=await run(yes,{sky:true});assert(r.ok);assert.deepEqual(yes.puts[1].slice(1),['REH',MIN,[80,60],false]);
+});
 await test('SKY는명시적으로켰을때만수집',async()=>{
  const w=world({jobs:[['SKY',MIN]],queue:[{status:200,text:grid(1,4)}]});assert.equal((await run(w)).error,'bad_plan');assert.equal(w.calls.length,0);
  const yes=world({jobs:[['SKY',MIN]],queue:[{status:200,text:grid(1,4)}]});assert((await run(yes,{sky:true})).ok);assert.equal(yes.plans[0],true);
