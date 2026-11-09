@@ -75,7 +75,7 @@ def t_levels(b):
     tipname = J(p, f"(() => {{ const l = {S}.cells.getLayers().find(l => l.getLatLngs && l.getTooltip()); return l.getTooltip().getContent() }})()")
     check(any(("<b>" + v + "</b>") in tipname for v in set(names.values())), "마우스 말풍선 제목도 지명")
     poly = J(p, f"(() => {{ const ls = {S}.cells.getLayers().filter(l => l.getTooltip && l.getTooltip() && !l.options.permanent && l.getLatLngs); const t = ls[0].getTooltip().getContent(); return t }})()")
-    check("<table" in poly and "fc-t3" in poly and "<svg" not in poly and "최저기온" in poly, "격자에 마우스 = 3시간 단위 표(그림 없음): " + poly[:120])
+    check("<table" in poly and "fc-t3" in poly and "<svg" not in poly and "강수확률" in poly and ">3시간<" in poly, "격자에 마우스 = 3시간 창과 같은 표(그림 없음): " + poly[:120])
     rows = p.locator(".fc-detail tbody tr"); check(rows.count() == n, "옆 표에 격자 목록")
     top = max((c for c in m.fc_cells if d in c[2]), key=lambda c: c[3])
     check(rows.first.locator("td").nth(1).inner_text() == str(top[3]), "적설 많은 격자부터(정수, 2026-11-04)")
@@ -124,15 +124,15 @@ def t_pin_chart(b):
     t3 = tp.locator("table.fc-t3")
     heads = [h.strip() for h in t3.locator("thead th:not(.lb)").all_inner_texts()]
     hrs = [h.split("\n")[0] for h in heads]
-    check(len(hrs) == 8 and all(int(hrs[i]) == (int(hrs[0]) + 3 * i) % 24 for i in range(8)), f"3시간 표 머리글 = 3시간 간격 8칸 {hrs}")
+    check(1 <= len(hrs) <= 9 and all(h in ('03', '06', '09', '12', '15', '18', '21', '24') for h in hrs), f"2026-11-09: 말풍선도 3시간 창처럼 칸 = 그 시각 하나(자정 24) {hrs}")
     rows = [r.locator("th.lb").inner_text() for r in t3.locator("tbody tr").all()]
-    check([x.startswith(y) for x, y in zip(rows, ["신적설", "강수", "강수확률", "최저기온"])] == [True] * 4 and len(rows) == 4, f"행(강수확률 포함): {rows}")
-    vals = [float(x) for x in t3.locator("tbody tr").first.locator("td").all_inner_texts() if x not in ("-", "0", "")]
+    check([x.startswith(y) for x, y in zip(rows, ["신적설", "강수", "강수확률", "기온"])] == [True] * 4 and len(rows) == 4, f"행: {rows}")
+    amounts = t3.locator("tbody tr").first.locator("td").all_inner_texts() + t3.locator("tbody tr").nth(1).locator("td").all_inner_texts()
+    check(all(x in ("", "-", "보통 눈", "많은 눈", "약한비", "보통비", "강한비") for x in amounts), f"신적설·강수는 강도만(mm·cm 없음) {amounts}")
     import re as _re
     tiptext = tp.inner_text(); tot = float(_re.search(r"24시간 적설 ([\d.]+)cm", tiptext).group(1))
     check("24시간 합" not in tiptext and "누르면" not in tiptext and tp.locator(".fc-tt-sum").count() == 0 and "확률 최고" in tiptext, "말풍선: 표 아래 '24시간 합'부터는 없음(위 요약에 강수확률): " + tiptext[:80].replace("\n", " "))
-    check(abs(sum(vals) - tot) < 0.35, f"3시간 합들의 합 = 24시간 합 ({sum(vals):.1f} ≈ {tot})")
-    box = tp.locator(".fc-trend-box").bounding_box(); check(box and 270 <= box["width"] <= 296, f"말풍선 표 폭 약 20% 확대(283px): {box and box['width']}")
+    box = tp.locator(".fc-trend-box").bounding_box(); check(box and 270 <= box["width"] <= 520, f"말풍선 표 폭(내용대로, 283px 이상): {box and box['width']}")
     # 지사를 고르면 눈여겨볼 격자(적설이 가장 많은 칸)가 고른 채로 열림(2026-10-10)
     top = max((c for c in m.fc_cells if d in c[2]), key=lambda c: (c[3], c[4], -c[5])); tk = f"{top[0]},{top[1]}"      # 같은 적설이면 강수 많은 칸 → 더 추운 칸(옆 표 순서와 같음)
     pin0 = p.locator("#fc-pin")
@@ -145,8 +145,8 @@ def t_pin_chart(b):
     hours=pin0.locator('table.fc-t1 thead tr').last.locator('th:not(.lb)').all_inner_texts()
     check(len(hours)==48 and all(x.isdigit() for x in hours),'아랫행48개 시각')
     leg = p.locator("#fc-legend")
-    check(leg.locator(".fc-show").inner_text().split() == ["적설", "강수", "확률", "기온"] and leg.locator(".fc-ramp li").count() == 6 and "cm" not in leg.inner_text() and "mm" not in leg.inner_text() and "마우스" not in leg.inner_text(),
-          "범례: 체크박스(적설·강수·확률·기온) + 적설량 색띠만: " + leg.inner_text().replace("\n", " "))
+    check(leg.locator(".fc-show").inner_text().split() == ["적설", "강수", "최대", "확률", "최저", "기온"] and leg.locator(".fc-ramp li").count() == 6 and "cm" not in leg.inner_text() and "mm" not in leg.inner_text() and "마우스" not in leg.inner_text(),
+          "범례: 24시간 + 체크박스(적설·강수·최대 확률·최저 기온) + 적설량 색띠만: " + leg.inner_text().replace("\n", " "))
     check([leg.locator(f"[data-fcshow={k}]").is_checked() for k in "spot"] == [True, False, False, True], "체크박스 기본 = 적설·기온")
     prow = [r.locator("th.lb").inner_text() for r in pin0.locator("table.fc-t1").first.locator("tbody tr").all()]
     check(len(prow) == 5 and prow[2].startswith("강수확률") and prow[4].startswith("습도") and pin0.locator(".fc-tt-sum").count()==0, f"고정 창 표의 강수확률 줄·합계 설명 제거, 85 습도 줄: {prow}")
@@ -167,7 +167,7 @@ def t_pin_chart(b):
     check(pin.locator("svg").count() == 0 and pin.locator("table.fc-t1").count() == 1, "고정 창:24개 시각 한 표")
     h1 = [x.split("\n")[0] for x in pin.locator("table.fc-t1").first.locator("thead tr").last.locator("th:not(.lb)").all_inner_texts()]
     check(len(h1) == 48 and all(int(h1[i].replace("시", "")) == (int(h1[0].replace("시", "")) + i) % 24 for i in range(48)), f"1시간 표 머리글48칸 {h1}")
-    pb = pin.locator(".fc-trend-box").bounding_box(); check(pb and 420 <= pb["width"] <= 480, f"왼쪽 제목을 제외한 촘촘한 표 폭(배율 1.2): {pb and pb['width']}")
+    pb = pin.locator(".fc-trend-box").bounding_box(); check(pb and 500 <= pb["width"] <= 540, f"2026-11-09: 왼쪽 제목 칸을 없애 표가 창 폭을 다 씀(배율 1.2): {pb and pb['width']}")
     check(J(p, f"(() => {{ const l = {S}.cells.getLayers().find(l => l.getLatLngs && l.options.weight === 4); return !!l }})()"), "고정한 격자는 굵은 테두리")
     p.wait_for_timeout(350); J(p, f"(() => {{ {S}.map.fire('click', {{ latlng: {S}.map.getCenter() }}); return null }})()"); p.wait_for_timeout(200)
     check(not p.locator("#fc-pin").is_visible() and J(p, f"{S}.pin") is None, "지도 아무 데나 누르면 닫힘")
@@ -284,13 +284,20 @@ def t_pin_move_resize(b):
     b0 = box(); w0 = tdw()
     check(abs(b0["width"] - 542) <= 4, f"세 창을 위한 기본 크기(2026-11-09 20% 크게): {b0}")
     # 옮기기
-    h = p.locator("#fc-pin .fc-pin-head").bounding_box(); p.mouse.move(h["x"] + 60, h["y"] + 8); p.mouse.down(); p.mouse.move(h["x"] - 200, h["y"] + 120, steps=4); p.mouse.up(); p.wait_for_timeout(100)
-    b1 = box(); check(abs(b1["x"] - (b0["x"] - 260)) <= 2 and abs(b1["y"] - (b0["y"] + 112)) <= 2 and abs(b1["width"] - b0["width"]) <= 1, f"제목을 끌면 옮겨짐: {b0} → {b1}")
-    # 오른쪽 아래 모서리로 키우기: 왼쪽 위 그대로, 표·글자도 커짐
+    check(p.locator("#fc-pin .fc-pin-head, #fc-pin .fc-period").count() == 0, "2026-11-09: 창 왼쪽 제목 칸 없음")
+    x0 = p.locator("#fc-pin .fc-x").bounding_box(); check(x0 and x0["x"] > b0["x"] + b0["width"] - 30 and x0["y"] < b0["y"] + 10, f"× 는 오른쪽 위 모서리 {x0} {b0}")
+    h = p.locator("#fc-pin th.lb").first.bounding_box(); p.mouse.move(h["x"] + 20, h["y"] + 8); p.mouse.down(); p.mouse.move(h["x"] - 240, h["y"] + 120, steps=4); p.mouse.up(); p.wait_for_timeout(100)
+    b1 = box(); check(abs(b1["x"] - (b0["x"] - 260)) <= 2 and abs(b1["y"] - (b0["y"] + 112)) <= 2 and abs(b1["width"] - b0["width"]) <= 1, f"표 왼쪽 항목 칸을 끌면 옮겨짐: {b0} → {b1}")
+    # 가로로 늘리기: 왼쪽 위 그대로, 글자 크기 그대로 표만 넓어져 다음 칸이 더 보임
+    n0 = J(p, "(() => { const s=document.querySelector('#fc-pin .fc-scroll'); return [...s.querySelectorAll('thead tr:last-child th:not(.lb)')].filter(t => t.getBoundingClientRect().right <= s.getBoundingClientRect().right + 1).length })()")
     g = p.locator("#fc-pin .fc-pin-grip.r").bounding_box(); p.mouse.move(g["x"] + 8, g["y"] + 8); p.mouse.down(); p.mouse.move(g["x"] + 108, g["y"] + 8, steps=4); p.mouse.up(); p.wait_for_timeout(100)
     b2 = box(); z = J(p, "+document.querySelector('.fc-pin-in').style.zoom")
-    check(abs(b2["x"] - b1["x"]) <= 2 and abs(b2["width"] - (b1["width"] + 100)) <= 3 and z > 1.2 and b2["height"] <= b1["height"] * 1.5, f"모서리로 커짐: {b1} → {b2}, 배율 {z}")
-    check(tdw()["width"] > w0["width"] * 1.15, "표 칸·글자도 같은 비율로 커짐")
+    n1 = J(p, "(() => { const s=document.querySelector('#fc-pin .fc-scroll'); return [...s.querySelectorAll('thead tr:last-child th:not(.lb)')].filter(t => t.getBoundingClientRect().right <= s.getBoundingClientRect().right + 1).length })()")
+    check(abs(b2["x"] - b1["x"]) <= 2 and abs(b2["width"] - (b1["width"] + 100)) <= 3 and abs(z - 1.2) < 0.001 and abs(tdw()["width"] - w0["width"]) <= 1 and n1 > n0, f"2026-11-09: 가로로 늘리면 글자 그대로 표만 넓어짐 {b1} → {b2}, 배율 {z}, 보이는 칸 {n0}→{n1}")
+    # 대각선으로 키우기: 표·글자도 커짐
+    g = p.locator("#fc-pin .fc-pin-grip.r").bounding_box(); p.mouse.move(g["x"] + 8, g["y"] + 8); p.mouse.down(); p.mouse.move(g["x"] + 40, g["y"] + 40, steps=3); p.mouse.move(g["x"] + 80, g["y"] + 80, steps=3); p.mouse.up(); p.wait_for_timeout(100)
+    b2 = box(); z = J(p, "+document.querySelector('.fc-pin-in').style.zoom")
+    check(abs(b2["x"] - b1["x"]) <= 2 and z > 1.2 and tdw()["width"] > w0["width"] * 1.08, f"대각선으로 끌면 글자·표가 같이 커짐: {b2}, 배율 {z}")
     fs = J(p, "(() => { const c = document.querySelector('.fc-pin .fc-tt td'); const r = document.createRange(); r.selectNodeContents(c); return r.getBoundingClientRect().height; })()")
     # 다른 격자를 눌러도 그대로
     p.locator(".fc-detail tbody tr").nth(1).click(); p.wait_for_timeout(300)
@@ -303,14 +310,16 @@ def t_pin_move_resize(b):
     b5 = box(); check(abs(b5["x"] + b5["width"] - right) <= 2 and b5["width"] < b4["width"] - 30, f"왼쪽 모서리: 오른쪽 끝 고정 {b4} {b5}")
     # 지도 밖으로 못 나감, 지도보다 안 커짐
     mb = p.locator("#view-forecast .jr-mapbox").bounding_box()
-    h = p.locator("#fc-pin .fc-pin-head").bounding_box(); p.mouse.move(h["x"] + 60, h["y"] + 8); p.mouse.down(); p.mouse.move(mb["x"] + mb["width"] + 500, mb["y"] + mb["height"] + 500, steps=4); p.mouse.up(); p.wait_for_timeout(100)
+    h = p.locator("#fc-pin th.lb").first.bounding_box(); p.mouse.move(h["x"] + 20, h["y"] + 8); p.mouse.down(); p.mouse.move(mb["x"] + mb["width"] + 500, mb["y"] + mb["height"] + 500, steps=4); p.mouse.up(); p.wait_for_timeout(100)
     b6 = box(); check(b6["x"] + b6["width"] <= mb["x"] + mb["width"] + 1 and b6["y"] + b6["height"] <= mb["y"] + mb["height"] + 1, f"지도 안에 머묾: {b6} {mb}")
     g = p.locator("#fc-pin .fc-pin-grip.l").bounding_box(); p.mouse.move(g["x"] + 8, g["y"] + 8); p.mouse.down(); p.mouse.move(mb["x"] - 3000, g["y"] + 8, steps=4); p.mouse.up(); p.wait_for_timeout(100)
     b7 = box(); check(b7["x"] >= mb["x"] - 1 and b7["width"] <= mb["width"] + 1 and b7["height"] <= mb["height"] + 1, f"지도보다 안 커짐: {b7} {mb}")
     # 아주 작게도 안 됨
     saved = J(p, "JSON.parse(localStorage.getItem('ss_fc_pin'))"); check(saved["scale"] >= 0.8 and saved["x"] is not None, f"이 브라우저에 기억: {saved}")
-    g = p.locator("#fc-pin .fc-pin-grip.r").bounding_box(); p.mouse.move(g["x"] + 8, g["y"] + 8); p.mouse.down(); p.mouse.move(g["x"] - 3000, g["y"], steps=4); p.mouse.up(); p.wait_for_timeout(100)
+    g = p.locator("#fc-pin .fc-pin-grip.r").bounding_box(); p.mouse.move(g["x"] + 8, g["y"] + 8); p.mouse.down(); p.mouse.move(g["x"] - 3000, g["y"] - 3000, steps=4); p.mouse.up(); p.wait_for_timeout(100)
     z = J(p, "+document.querySelector('.fc-pin-in').style.zoom"); check(z >= 0.8 - 0.001, f"너무 작아지지 않음: {z}")
+    g = p.locator("#fc-pin .fc-pin-grip.r").bounding_box(); p.mouse.move(g["x"] + 8, g["y"] + 8); p.mouse.down(); p.mouse.move(g["x"] - 3000, g["y"] + 8, steps=4); p.mouse.up(); p.wait_for_timeout(100)
+    iw = J(p, "document.querySelector('#fc-pin .fc-pin-in').offsetWidth"); check(iw >= 299, f"가로로도 너무 좁아지지 않음: {iw}")
     # 새로 열어도 기억
     b8 = box(); p.reload(); p.wait_for_function("window.ForecastUI && ForecastUI._state().inited", timeout=60000)
     p.click(".tab-btn[data-tab=forecast]"); p.wait_for_timeout(800); p.click("#fc-tree [data-fchq='강원']"); p.wait_for_timeout(600); p.locator("#fc-tree [data-fcbr]").first.click(); p.wait_for_timeout(900)
@@ -493,7 +502,7 @@ def t_tail_separate(b):
     dates=p.locator('#fc-tail thead tr').first.locator('th:not(.lb)').all_inner_texts()
     check(all('~' not in x for x in dates),'시작 날짜 하나만 표시')
     for root in ('#fc-pin','#fc-tail'):
-        check(p.locator(root+' thead .lb').all_inner_texts()==['일자','시간'],'머리글 좌측 일자/시간')
+        check(p.locator(root+' thead .lb').all_inner_texts()==['일자',{'#fc-pin':'1시간','#fc-tail':'3시간'}[root]],'2026-11-09: 머리글 좌측 일자/1시간·3시간(창 제목을 표 안으로)')
         check(p.locator(root+' .fc-pin-note').count()==0,'하단 설명 제거')
         align=J(p,"Array.from(document.querySelectorAll('"+root+" .fc-tt th,"+root+" .fc-tt td')).every(x=>getComputedStyle(x).textAlign==='center')")
         check(align,'모든 표 칸 가운데 정렬')
@@ -556,8 +565,8 @@ def t_right_dock_and_tail_drag(b):
     check(mb['x']+point['x']<a['x'],'선택 격자는 창 왼쪽에 보임')
     p.screenshot(path='../../outputs/73_docked.png')
     scale=J(p,"document.querySelector('#fc-tail .fc-pin-in').style.zoom")
-    h=p.locator('#fc-tail .fc-pin-head').bounding_box()
-    p.mouse.move(h['x']+60,h['y']+10);p.mouse.down();p.mouse.move(h['x']-60,h['y']+70,steps=5);p.mouse.up()
+    h=p.locator('#fc-tail th.lb').first.bounding_box()
+    p.mouse.move(h['x']+20,h['y']+10);p.mouse.down();p.mouse.move(h['x']-100,h['y']+70,steps=5);p.mouse.up()
     moved=p.locator('#fc-tail').bounding_box()
     check(abs(moved['width']-z['width'])<=1 and abs(moved['height']-z['height'])<=1,'제목 이동 후 폭과 높이 유지')
     check(abs(moved['x']-z['x']+120)<=2 and abs(moved['y']-z['y']-60)<=2,'위치만 이동')
@@ -728,7 +737,7 @@ def t_weekday_and_hourly_title(b):
     J(p,f"(() => {{SSOpenForecast('{m.fc_cells[0][2][0]}');return null}})()")
     p.wait_for_function("document.querySelector('#fc-tail table')")
     check(p.locator('.tab-btn[data-tab=forecast]').inner_text()=='기관별 예보','상단 메뉴 이름')
-    check(p.locator('#fc-pin .fc-period').inner_text()=='1시간','왼쪽 제목은1시간')
+    check(p.locator('#fc-pin thead tr').last.locator('th.lb').inner_text()=='1시간' and p.locator('#fc-tail thead tr').last.locator('th.lb').inner_text()=='3시간' and p.locator('#fc-daily th.lb').first.inner_text()=='일별','표 안 시간 칸 이름 1시간·3시간·일별')
     days=p.locator('#fc-pin thead tr').first.inner_text()
     check('11/6(금)' in days and '11/7(토)' in days,'한국 날짜의 요일과 자정 경계')
     for root in ['#fc-pin','#fc-tail']:
@@ -752,8 +761,8 @@ def t_daily_desktop(b):
     p.screenshot(path='../../outputs/97_daily_desktop.png')
     a=p.locator('#fc-tail').bounding_box();z=p.locator('#fc-daily').bounding_box();mb=p.locator('#fmap').bounding_box()
     check(z['y']>=a['y']+a['height'] and abs(z['x']+z['width']-(mb['x']+mb['width']-10))<3,'일별은3시간 아래 오른쪽')
-    height=z['height'];h=p.locator('#fc-daily .fc-pin-head').bounding_box()
-    p.mouse.move(h['x']+40,h['y']+10);p.mouse.down();p.mouse.move(h['x']+20,h['y']-15,steps=4);p.mouse.up()
+    height=z['height'];h=p.locator('#fc-daily th.lb').first.bounding_box()
+    p.mouse.move(h['x']+20,h['y']+10);p.mouse.down();p.mouse.move(h['x'],h['y']-15,steps=4);p.mouse.up()
     check(abs(p.locator('#fc-daily').bounding_box()['height']-height)<2,'일별 이동 중 높이 유지')
     p.locator('.fc-daily-x').click()
     check(not p.locator('#fc-daily').is_visible() and p.locator('#fc-tail').is_visible(),'일별만 닫기')
@@ -811,10 +820,10 @@ def t_compact_modals_and_wheel(b):
             check(r['y']>=previous-1 and r['y']+r['height']<=legend['y']+1,f'{width}x{height} 세창이화면안·범례안가림 {root} {r}')
             previous=r['y']+r['height']
             check(p.locator(root).evaluate('(x)=>x.scrollHeight<=x.clientHeight+1'),'창세로스크롤없음')
-            check(p.locator(root+' .fc-pin-head').bounding_box()['x']<p.locator(root+' table').bounding_box()['x'],'제목은표왼쪽')
+            xb=p.locator(root+' .fc-x').bounding_box();check(xb['x']>r['x']+r['width']-30 and xb['y']<r['y']+10,'× 는 창 오른쪽 위')
         check(p.locator('.fc-tt-sum,.fc-daily details').count()==0,'하단설명없음')
     for root in ['#fc-pin','#fc-tail','#fc-daily']:
-        p.locator(root+' .fc-pin-head').hover();p.mouse.wheel(0,220);p.wait_for_timeout(100)
+        p.locator(root+' th.lb').first.hover();p.mouse.wheel(0,220);p.wait_for_timeout(100)
         check(p.locator(root+' .fc-scroll').evaluate('(x)=>x.scrollLeft')>0,'창위휠을가로스크롤로변환 '+root)
     p.screenshot(path='../../outputs/98_compact_desktop.png')
 
@@ -827,7 +836,7 @@ def t_centered_mobile_label(b):
         if tab=='daily':p.wait_for_selector('#fc-daily table')
         r=p.locator('#fc-mobile').bounding_box()
         check(abs(r['y']+r['height']/2-406)<2,'휴대폰창세로중앙')
-        check(p.locator('#fc-mobile .fc-pin-head:visible').count()==0,'패널별중복제목없음')
+        check(p.locator('#fc-mobile .fc-x:visible').count()==0,'휴대폰은 창별 × 없음(위쪽 닫기 하나)')
         if tab in ('hourly','three'):
             clipped=J(p,"Array.from(document.querySelectorAll('#fc-mobile th.lb')).filter(x=>x.offsetParent&&x.scrollWidth>x.clientWidth+1).map(x=>x.textContent)")
             check(not clipped,f'2026-11-09: 휴대폰 항목 이름이 칸 밖으로 안 나감({tab}) {clipped}')
@@ -875,6 +884,30 @@ def t_kma_start_hour(b):
     check(J(p, f"Date.parse('{first3}') - Date.parse('{st}')") == 3600000 and n3b <= n3a, f"3시간 표도 같은 시각부터: {first3} / {st}")
     check(J(p, "ForecastSeries.skipHours('2026-11-09T00:00:00Z', Date.parse('2026-11-08T23:24:00Z'))") == 0 and J(p, "ForecastSeries.skipHours('2026-11-09T00:00:00Z', Date.parse('2026-11-08T23:34:00Z'))") == 1 and J(p, "ForecastSeries.skipHours('2026-11-09T00:00:00Z', Date.parse('2026-11-08T23:50:00Z'))") == 1, "08:24 → 다음 정시부터, 08:34·08:50 → 그다음 정시부터")
 TESTS += [t_kma_start_hour]
+
+def t_side_fold_legend_daylines(b):
+    """2026-11-09 사용자: 왼쪽 목록 접기, 범례 맨 앞 24시간·최대/확률·최저/기온 두 줄, 표 안 날짜 바뀌는 칸 진한 선"""
+    p, m = open_page(b); d = m.fc_cells[0][2][0]
+    J(p, f"SSOpenForecast('{d}')"); p.locator('.fc-detail tbody tr').first.click(); p.wait_for_selector('#fc-daily table')
+    lg = p.locator('#fc-legend')
+    check(lg.locator('.fc-legend-t').inner_text() == '24시간' and lg.inner_text().strip().startswith('24시간'), '범례 맨 앞 24시간')
+    names = [x.inner_text() for x in lg.locator('label.fc-chk span').all()]
+    check(names == ['적설', '강수', '최대\n확률', '최저\n기온'], f'범례 이름(두 줄) {names}')
+    mw = p.locator('#fmap').bounding_box()['width']
+    p.locator('.fc-side-tog').click(); p.wait_for_timeout(300)
+    side = p.locator('#view-forecast .jr-side').bounding_box()
+    check(side['width'] <= 44 and not p.locator('#fc-tree').is_visible() and p.locator('#fmap').bounding_box()['width'] > mw + 300, f'목록 접으면 좁아지고 지도가 넓어짐 {side}')
+    check(J(p, "localStorage.getItem('ss_fc_side')") == 'fold', '이 브라우저에 기억')
+    p.locator('.fc-side-tog').click(); p.wait_for_timeout(300)
+    check(p.locator('#fc-tree').is_visible() and p.locator('.fc-side-tog').get_attribute('aria-expanded') == 'true', '다시 펴기')
+    for root, sel in [('#fc-pin', 'tbody td.dl'), ('#fc-tail', 'tbody td.dl'), ('#fc-daily', 'tbody td.dl')]:
+        n = p.locator(root + ' ' + sel).count()
+        bw = J(p, f"(() => {{ const c=document.querySelector('{root} {sel}'); return c ? getComputedStyle(c).borderLeftWidth : null }})()")
+        check(n > 0 and bw and float(bw[:-2]) >= 1.5, f'{root}: 날짜가 바뀌는 칸 진한 선(창 배율로 1.67px 등) {n} {bw}')
+    first_day = J(p, "(() => { const t=document.querySelector('#fc-pin table'); const ths=[...t.querySelectorAll('thead tr:last-child th:not(.lb)')]; const i=ths.findIndex(th=>th.classList.contains('dl')); return [i, ths.length] })()")
+    check(first_day[0] > 0, f'1시간 표: 첫 칸이 아닌 자정 칸에 선 {first_day}')
+
+TESTS += [t_side_fold_legend_daylines]
 
 if __name__ == "__main__":
     only = sys.argv[1:]

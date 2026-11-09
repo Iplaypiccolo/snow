@@ -27,7 +27,6 @@
   function num(v) { return v == null ? '-' : String(Math.round(v)); }                             // 적설·강수(2026-11-04): 기상청 격자 값은 정수로만 옴 → 소수점 없이
   // 범위(마이그레이션 62): '1mm·1cm 미만' 시각마다 위쪽 +1 → '0~3', 한 시각뿐이면 '~1'. hi 가 없으면(예전 자료) 아래쪽만
   function rng(lo, hi) { if (lo == null) return '-'; var a = Math.round(lo), b = hi == null ? a : Math.round(hi); return b > a ? (a === 0 && b === 1 ? '~1' : a + '~' + b) : String(a); }
-  function cntOf(a) { return a.filter(function (v) { return v; }).length; }
   function tmp(v) { return v == null ? '-' : String(Math.round(v * 10) / 10); }                 // 기온(℃): -5, 1.5
   function pct(v) { return v == null ? '-' : String(Math.round(v)); }                             // 강수확률(%): 60
   function hh(iso) { var d = iso ? new Date(iso) : null; return d && !isNaN(d) ? p2(d.getHours()) + '시' : '-'; }
@@ -37,7 +36,7 @@
   function snowColor(v) { if (v == null) return '#d8d6cc'; for (var i = 0; i < SCALE.length; i++) if (v >= SCALE[i][0]) return SCALE[i][1]; return '#eef3f8'; }
 
   // 지도 칸에 보일 값 — 범례의 체크박스(2026-10-10). 기본 = 적설·기온. 이 브라우저에 기억(localStorage)
-  var SHOW_KEY = 'ss_fc_show', SHOW_ITEMS = [['s', '적설'], ['p', '강수'], ['o', '확률'], ['t', '기온']];
+  var SHOW_KEY = 'ss_fc_show', SHOW_ITEMS = [['s', '적설'], ['p', '강수'], ['o', '최대<br>확률'], ['t', '최저<br>기온']];      // 이름에 <br> = 두 줄(2026-11-09 사용자)
   function loadShow() {
     var d = { s: true, p: false, o: false, t: true };
     try { var j = JSON.parse(localStorage.getItem(SHOW_KEY) || 'null'); if (j && typeof j === 'object') SHOW_ITEMS.forEach(function (x) { if (typeof j[x[0]] === 'boolean') d[x[0]] = j[x[0]]; }); } catch (e) {}
@@ -67,11 +66,22 @@
   function bval(id) { var f = S.bf[id]; if (!f || Date.now() - Date.parse(f.issued_at) > STALE) return null; return f; }
 
   /* ---------- 뼈대 ---------- */
+  // 2026-11-09 사용자: 왼쪽 기관별 예보 목록을 접었다 폈다(이 브라우저에서 기억)
+  var SIDE_KEY = 'ss_fc_side';
+  function sideFolded() { try { return localStorage.getItem(SIDE_KEY) === 'fold'; } catch (e) { return false; } }
+  function toggleSide() {
+    var side = document.querySelector('#view-forecast .jr-side'), btn = side && side.querySelector('.fc-side-tog'); if (!side) return;
+    var fold = !side.classList.contains('fold'); side.classList.toggle('fold', fold);
+    btn.textContent = fold ? '▶' : '◀'; btn.setAttribute('aria-expanded', String(!fold));
+    try { localStorage.setItem(SIDE_KEY, fold ? 'fold' : 'open'); } catch (e) {}
+    if (S.map) S.map.invalidateSize({ pan: false });
+    applyPinGeo(); if (window.ForecastDaily) window.ForecastDaily.layout();
+  }
   function buildShell() {
     $('view-forecast').innerHTML =
       '<div class="jr-wrap">' +
-      '<div class="jr-side">' +
-        '<div class="jr-head"><b>기관별 예보</b></div>' +
+      '<div class="jr-side' + (sideFolded() ? ' fold' : '') + '">' +
+        '<div class="jr-head"><b>기관별 예보</b><button type="button" class="fc-side-tog" aria-expanded="' + !sideFolded() + '" aria-label="기관별 예보 목록 접기·펴기">' + (sideFolded() ? '▶' : '◀') + '</button></div>' +
         '<div id="fc-meta" class="fc-meta"></div>' +
         '<div id="fc-tree" class="jr-tree"></div>' +
       '</div>' +
@@ -107,58 +117,62 @@
       m._start = r.json.start_at; S.series[id] = m; return m;
     }).catch(function () { return null; });
   }
-  // 24시간 추이 표(그림 대신) — 값 24개(start 의 정시부터 1시간씩)를 시각별 표로. s = 적설(cm), p = 강수(mm), t = 기온(℃)
-  //  · 마우스 말풍선: 3시간 단위(칸 = 그 시각부터 3시간의 합, 기온은 그 3시간의 최저)  · 눌러 고정한 창: 1시간 단위(12시간씩 두 줄)
+  // 시각별 표(그림 대신) — 값(start 의 정시부터 1시간씩). s = 적설(cm), p = 강수(mm), t = 기온(℃)
+  //  · 마우스 말풍선: 3시간 창과 같은 칸(threeRows)  · 1시간 창: 1시간 단위 한 줄 가로 스크롤
   function hourAt(start, i) { var d = start ? new Date(Date.parse(start) + i * 3600e3) : null; return d && !isNaN(d) ? d : null; }
   function hourLabel(start, i) { var d = hourAt(start, i); return d ? p2(d.getHours()) + '시' : ''; }
-  function sumOf(a) { var x = a.filter(function (v) { return v != null; }); return x.length ? x.reduce(function (m, v) { return m + v; }, 0) : null; }
-  function minOf(a) { var x = a.filter(function (v) { return v != null; }); return x.length ? Math.min.apply(null, x) : null; }
-  function maxOf(a) { var x = a.filter(function (v) { return v != null; }); return x.length ? Math.max.apply(null, x) : null; }
   function cellPop(v) { return v == null ? '<td class="z">-</td>' : v === 0 ? '<td class="z">0</td>' : '<td class="v">' + pct(v) + '</td>'; }
   function cellNum(v, tc) { if (v == null) return '<td class="z">-</td>'; if (tc) return '<td class="v tr">' + rng(v, v + tc) + '</td>'; return v === 0 ? '<td class="z"></td>' : '<td class="v">' + num(v) + '</td>'; }      // tc = 그 칸의 '~1' 시각 수
   function cellHum(v) { return v == null ? '<td class="z">-</td>' : '<td class="v">' + Math.round(v) + '</td>'; }      // 85: 습도(%)
   function cellTmp(v) { return v == null ? '<td class="z">-</td>' : '<td class="v' + (v < 0 ? ' neg' : '') + '">' + tmp(v) + '</td>'; }
-  function forecastHeader(slots, hourly) {
+  function forecastHeader(slots, hourly, label) {
     function date(x){return kstDateLabel(x);}
     function hour(x){return p2(new Date(Date.parse(x)+9*3600e3).getUTCHours());}
-    var days=[],times='';
+    var days=[],times='',label0=label||'시간';      // 2026-11-09 사용자: 창 왼쪽 제목(1시간·3시간)을 표의 시간 칸 이름으로
     slots.forEach(function(b){
       // 89: 3시간 칸은 기상청처럼 그 시각 하나(03·06…, 자정은 앞날의 24)
       var at=hourly?b.first_at:new Date(Date.parse(b.slot_at)-3600e3).toISOString(), day=date(at), label=hourly?hour(b.first_at):hour(b.slot_at);
       if(!hourly && label==='00') label='24';
-      var prev=days[days.length-1];if(prev&&prev.day===day)prev.n++;else days.push({day:day,n:1});
-      times+='<th'+(b.vs?' class="vs"':'')+'>'+label+'</th>';
+      var prev=days[days.length-1],dl=!!prev&&prev.day!==day;if(prev&&!dl)prev.n++;else days.push({day:day,n:1});
+      times+='<th'+(b.vs||dl?' class="'+(b.vs?'vs':'')+(dl?' dl':'')+'"':'')+'>'+label+'</th>';
     });
-    return '<tr><th class="lb">일자</th>'+days.map(function(d){return '<th colspan="'+d.n+'">'+esc(d.day)+'</th>';}).join('')+'</tr><tr><th class="lb">시간</th>'+times+'</tr>';
+    return '<tr><th class="lb">일자</th>'+days.map(function(d,i){return '<th colspan="'+d.n+'"'+(i?' class="dl"':'')+'>'+esc(d.day)+'</th>';}).join('')+'</tr><tr><th class="lb">'+esc(label0)+'</th>'+times+'</tr>';
   }
-  // from~to(번호) 구간을 step 시간씩 묶어 표 하나 — step 3 이면 합·최저, step 1 이면 그 시각 값
-  function tableBlock(sr, start, from, to, step) {
-    var head = '', rs = '', rp = '', rt = '', ro = '', rh = '', hasPop = !!(sr.r && sr.r.length), vn = sr.vn || 0;
+  // 1시간 창 표: from~to(번호) 시각의 값 그대로(합치지 않음)
+  function hourTable(sr, start, from, to) {
+    var rs = '', rp = '', rt = '', ro = '', rh = '', hasPop = !!(sr.r && sr.r.length), vn = sr.vn || 0;
     var hasHum = !!(sr.h && sr.h.slice(from, to).some(function (v) { return v != null; }));      // r = 강수확률, h = 습도(85): 서버에 있을 때만 줄을 보임. vn = 앞에서 몇 시각이 초단기 값인지
-    function mark(html, i) { return i < vn ? html.replace('<td class="', '<td class="vs ') : html; }
-    for (var i = from; i < to; i += step) {
-      var d = hourAt(start, i), part = function (k) { return (sr[k] || []).slice(i, Math.min(i + step, to)); };
-      var prev = i > 0 ? hourAt(start, i - step) : null, newDay = d && (i === 0 || (prev && prev.getDate() !== d.getDate()));   // 날짜는 맨 처음 칸과 날짜가 바뀌는 칸에만
-      head += '<th' + (i < vn ? ' class="vs"' : '') + '>' + (d ? p2(d.getHours()) : '') + (newDay ? '<small>' + kstDateLabel(d.toISOString()) + '</small>' : '') + '</th>';
-      rs += mark(cellNum(sumOf(part('s')), cntOf(part('sq'))), i); rp += mark(cellNum(sumOf(part('p')), cntOf(part('pq'))), i); rt += mark(cellTmp(minOf(part('t'))), i); if (hasPop) ro += mark(cellPop(maxOf(part('r'))), i); if (hasHum) rh += cellHum(maxOf(part('h')));      // 86: 묶을 때는 최고(1시간 표는 그 시각 값). 앞 6시간도 단기 값
+    var dayAt = function (i) { var d = hourAt(start, i); return d ? kstDateLabel(d.toISOString()) : ''; };
+    function mark(html, i, vs) { var c = (vs && i < vn ? 'vs ' : '') + (i > from && dayAt(i) !== dayAt(i - 1) ? 'dl ' : ''); return c ? html.replace('<td class="', '<td class="' + c) : html; }      // dl = 날짜가 바뀌는 칸(진한 선)
+    function at(k, i) { var a = sr[k]; return a && a[i] != null ? a[i] : null; }
+    for (var i = from; i < to; i++) {
+      rs += mark(cellNum(at('s', i), at('sq', i) ? 1 : 0), i, 1); rp += mark(cellNum(at('p', i), at('pq', i) ? 1 : 0), i, 1); rt += mark(cellTmp(at('t', i)), i, 1);
+      if (hasPop) ro += mark(cellPop(at('r', i)), i, 1);
+      if (hasHum) rh += mark(cellHum(at('h', i)), i, 0);
     }
-    var u = step === 1 ? '' : (step + '시간 '), slots=[];
-    for(var j=from;j<to;j++){var stamp=new Date(Date.parse(start)+j*3600e3).toISOString();slots.push({first_at:stamp,last_at:stamp,vs:j<vn});}
-    return '<table class="fc-tt fc-t' + step + '"><thead>' + (step===1?forecastHeader(slots,true):'<tr><th class="lb">시</th>'+head+'</tr>') + '</thead><tbody>' +
+    var slots = [];
+    for (var j = from; j < to; j++) { var stamp = new Date(Date.parse(start) + j * 3600e3).toISOString(); slots.push({ first_at: stamp, last_at: stamp, vs: j < vn }); }
+    return '<table class="fc-tt fc-t1"><thead>' + forecastHeader(slots, true, '1시간') + '</thead><tbody>' +
       '<tr><th class="lb s">신적설<small>cm</small></th>' + rs + '</tr><tr><th class="lb p">강수<small>mm</small></th>' + rp + '</tr>' +
       (hasPop ? '<tr><th class="lb o">강수확률<small>%</small></th>' + ro + '</tr>' : '') +      // 2026-11-09 사용자: '확률' → '강수확률'
-      '<tr><th class="lb t">' + (step === 1 ? '기온' : '최저기온') + '<small>℃</small></th>' + rt + '</tr>' +
+      '<tr><th class="lb t">기온<small>℃</small></th>' + rt + '</tr>' +
       (hasHum ? '<tr><th class="lb h">습도<small>%</small></th>' + rh + '</tr>' : '') + '</tbody></table>';
   }
+
   // big = false: 마우스 말풍선, true: 24개 시각을 한 줄로 가로 스크롤
   function fcNow() { return typeof window.__fcNow === 'function' ? window.__fcNow() : Date.now(); }      // 시험에서 시각을 정할 수 있게
   function trendBox(sr, start, big) {
     if (!sr) return '';
-    if (!big) return '<div class="fc-trend-box">' + tableBlock(sr, start, 0, 24, 3) + '<div class="fc-tt-cap">칸 = 그 시각부터 3시간 합 (기온은 최저' + (sr.r && sr.r.length ? ', 확률은 최고' : '') + ')</div></div>';
-    return '<div class="fc-trend-box big"><div class="fc-scroll" tabindex="0" aria-label="시간별 예보 가로 스크롤">'+tableBlock(sr,start,window.ForecastSeries.skipHours(start,fcNow()),(sr.s||[]).length,1)+'</div></div>';
+    if (!big) {      // 2026-11-09 사용자: 지도 마우스 말풍선도 3시간 창처럼(가까운 24시간)
+      var bins = window.ForecastSeries.combine({ status: 'ok', upper: { start_at: start, series: sr } }, window.ForecastSeries.skipHours(start, fcNow()));
+      if (!bins.length) return '';
+      var hd = bins.map(function (b) { var h = p2(new Date(Date.parse(b.slot_at) + 9 * 3600e3).getUTCHours()); return '<th>' + (h === '00' ? '24' : h) + '</th>'; }).join('');
+      return '<div class="fc-trend-box"><table class="fc-tt fc-t3"><thead><tr><th class="lb">3시간</th>' + hd + '</tr></thead><tbody>' + threeRows(bins) + '</tbody></table></div>';
+    }
+    return '<div class="fc-trend-box big"><div class="fc-scroll" tabindex="0" aria-label="시간별 예보 가로 스크롤">'+hourTable(sr,start,window.ForecastSeries.skipHours(start,fcNow()),(sr.s||[]).length)+'</div></div>';
   }
   // 고정 창 위치·크기(컴퓨터 화면만, 2026-11-03): scale = 글자·표 배율, x·y = 지도 안 왼쪽 위(null = 처음 자리 오른쪽 위). 지도보다 커지거나 밖으로 나가지 않게 맞춤
-  var PIN_KEY = 'ss_fc_pin', PIN_BODY = 440, PIN_PAD = 14, PIN_MIN = 0.8, PIN_DEFAULT = 1.2;      // PIN_BODY·PIN_PAD = 배율 1일 때 표 폭·창 안팎 여백(px). PIN_DEFAULT = 세 창 기본 배율(2026-11-09 20% 크게, 일별 창도 이 값)
+  var PIN_KEY = 'ss_fc_pin', PIN_BODY = 440, PIN_PAD = 14, PIN_MIN = 0.8, PIN_DEFAULT = 1.2, PIN_W_MIN = 300;      // PIN_W_MIN = 가로로 줄일 때 표 폭 하한(배율 1 기준)      // PIN_BODY·PIN_PAD = 배율 1일 때 표 폭·창 안팎 여백(px). PIN_DEFAULT = 세 창 기본 배율(2026-11-09 20% 크게, 일별 창도 이 값)
   function isPhone() { return window.matchMedia('(max-width:760px)').matches; }
   function loadPinGeo() { try { var j = JSON.parse(localStorage.getItem(PIN_KEY) || 'null'); if (j && j.scale > 0 && j.layout==='compact-v3') return j; } catch (e) {} return { scale: PIN_DEFAULT, x: null, y: null, layout:'compact-v3' }; }
   function savePinGeo() { try { localStorage.setItem(PIN_KEY, JSON.stringify(S.pinGeo)); } catch (e) {} }
@@ -169,6 +183,7 @@
     var g = geo, mb = box.parentNode, mw = mb.clientWidth, mh = mb.clientHeight; if (!mw || !mh) return;
     var sc = Math.max(PIN_MIN, g.scale); inner.style.zoom = sc;
     var leftRoom=Math.min(160,mw*0.25);
+    if (g.w) { g.w = Math.max(PIN_W_MIN, Math.min(g.w, (mw - leftRoom - PIN_PAD) / sc)); inner.style.width = g.w + 'px'; } else inner.style.width = '';      // 가로로 늘린 표 폭(배율 1 기준 px)
     var k = Math.min(1, (mw - leftRoom - PIN_PAD) / (box.offsetWidth - PIN_PAD), (mh - PIN_PAD) / (box.offsetHeight - PIN_PAD));
     if (k < 1) { sc = Math.max(PIN_MIN, sc * k); inner.style.zoom = sc; }
     if (g.x != null) { box.style.bottom='auto'; box.style.right = 'auto'; box.style.left = Math.max(0, Math.min(g.x, mw - box.offsetWidth)) + 'px'; box.style.top = Math.max(0, Math.min(g.y, mh - box.offsetHeight)) + 'px'; }
@@ -194,14 +209,26 @@
   }
   function pinDrag(e) {
     if (isPhone()) return;
-    var t = e.target, grip = t.closest && t.closest('.fc-pin-grip'), head = t.closest && t.closest('.fc-pin-head'); if (!grip && (!head || t.closest('.fc-pin-x,.fc-tail-x,.fc-daily-x'))) return;
+    // 옮기기: 표 왼쪽 항목 칸(th.lb)이나 창 테두리 여백을 끌기(2026-11-09 왼쪽 제목 칸을 없앤 뒤). 크기: 아래 모서리
+    var t = e.target, grip = t.closest && t.closest('.fc-pin-grip'), cl = t.classList || { contains: function () { return false; } };
+    var handle = t.closest && (t.closest('.fc-pin th.lb,.fc-tail th.lb,.fc-daily th.lb') || cl.contains('fc-pin') || cl.contains('fc-tail') || cl.contains('fc-daily') || cl.contains('fc-pin-in'));
+    if (!grip && (!handle || t.closest('button'))) return;
     var box = t.closest('.fc-pin,.fc-tail,.fc-daily'), geo = box.id === 'fc-daily' ? window.ForecastDaily.geo() : box.id === 'fc-tail' ? S.tailGeo : S.pinGeo, r = box.getBoundingClientRect(), mr = box.parentNode.getBoundingClientRect(), sx = e.clientX, sy = e.clientY, x0 = r.left - mr.left, y0 = r.top - mr.top, w0 = r.width, left = grip && grip.dataset.grip === 'l';
     ['fc-pin','fc-tail','fc-daily'].forEach(function(id){var el=$(id);if(el)el.style.zIndex=el===box?'802':'801';});
     geo.x = x0; geo.y = y0; e.preventDefault();
+    var inner0 = box.querySelector('.fc-pin-in'), z0 = parseFloat(inner0 && inner0.style.zoom) || geo.scale || 1, iw0 = inner0 ? inner0.offsetWidth : PIN_BODY, mode = null;
     function mv(ev) {
       var dx = ev.clientX - sx, dy = ev.clientY - sy;
       if (!grip) { movePinBox(box,geo,x0+dx,y0+dy,w0,r.height); return; }
-      geo.scale = Math.max(PIN_MIN, ((left ? w0 - dx : w0 + dx) - PIN_PAD) / PIN_BODY);
+      if (!mode) { if (Math.abs(dx) + Math.abs(dy) < 6) return; mode = Math.abs(dy) < Math.abs(dx) * 0.35 ? 'w' : 'z'; }      // 처음 움직인 방향으로 정함
+      if (mode === 'w') {
+        geo.w = Math.max(PIN_W_MIN, iw0 + (left ? -dx : dx) / z0);
+        if (left) geo.x = 0;
+        applyBoxGeo(box, geo); if (box.id === 'fc-daily' && window.ForecastDaily) window.ForecastDaily.layout();
+        if (left) { geo.x = x0 + w0 - box.offsetWidth; applyBoxGeo(box, geo); }
+        return;
+      }
+      geo.scale = Math.max(PIN_MIN, ((left ? w0 - dx : w0 + dx) - PIN_PAD) / (geo.w || PIN_BODY));
       if (left) geo.x = 0;                                 // 왼쪽 모서리: 오른쪽 끝을 그대로 두고 왼쪽으로 커짐
       geo.scale = applyBoxGeo(box, geo) || geo.scale;
       if (left) { geo.x = x0 + w0 - box.offsetWidth; applyBoxGeo(box, geo); }
@@ -215,21 +242,23 @@
     function f(x) { var d = new Date(Date.parse(x) + 9 * 3600e3); return (d.getUTCMonth()+1)+'/'+d.getUTCDate()+' '+p2(d.getUTCHours())+'시'; }
     return f(a) + '~' + f(b);
   }
+  // 89(2026-11-09 사용자 "기상청처럼"): 신적설·강수는 강도만, 기온·습도는 그 시각 값, 강수확률은 기상청 규칙(series.js combine). 3시간 창과 지도 말풍선이 같이 씀
+  function threeRows(bins) {
+    var rows=[['신적설','snow'],['강수','pcp'],['강수확률 %','pop'],['기온 ℃','tmp']];
+    if(bins.some(function(b){return b.reh!=null;}))rows.push(['습도 %','reh']);
+    var dl=bins.map(function(b,i){return i>0&&kstDateLabel(new Date(Date.parse(b.slot_at)-3600e3).toISOString())!==kstDateLabel(new Date(Date.parse(bins[i-1].slot_at)-3600e3).toISOString());});
+    return rows.map(function(row){
+      var k=row[1],code=k==='snow'||k==='pcp';
+      return '<tr><th class="lb">'+row[0]+'</th>'+bins.map(function(b,i){
+        var value=code?window.ForecastSeries.intensity(b[k+'_code'],k==='snow'):k==='tmp'?tmp(b.tmp):pct(b[k]),c=(code?'fc-qual':'')+(dl[i]?' dl':'');
+        return '<td'+(c?' class="'+c.trim()+'"':'')+'>'+esc(value)+'</td>';
+      }).join('')+'</tr>';
+    }).join('');
+  }
   function tailTables(data) {
     var bins=window.ForecastSeries.combine(data,window.ForecastSeries.skipHours(data&&data.upper&&data.upper.start_at,fcNow()));
     if(!bins.length)return '<p>표시할 예보 자료가 없습니다.</p>';
-    var html='<div class="fc-scroll" tabindex="0" aria-label="3시간 예보 가로 스크롤"><table class="fc-tt fc-three"><thead>'+forecastHeader(bins,false)+'</thead><tbody>';
-    // 89(2026-11-09 사용자 "기상청처럼"): 신적설·강수는 강도만, 기온·습도는 그 시각 값, 강수확률은 기상청 규칙(series.js combine)
-    var rows=[['신적설','snow'],['강수','pcp'],['강수확률 %','pop'],['기온 ℃','tmp']];
-    if(bins.some(function(b){return b.reh!=null;}))rows.push(['습도 %','reh']);
-    rows.forEach(function(row){
-      var k=row[1],code=k==='snow'||k==='pcp';
-      html+='<tr><th class="lb">'+row[0]+'</th>'+bins.map(function(b){
-        var value=code?window.ForecastSeries.intensity(b[k+'_code'],k==='snow'):k==='tmp'?tmp(b.tmp):pct(b[k]);
-        return '<td'+(code?' class="fc-qual"':'')+'>'+esc(value)+'</td>';
-      }).join('')+'</tr>';
-    });
-    return html+'</tbody></table></div>';
+    return '<div class="fc-scroll" tabindex="0" aria-label="3시간 예보 가로 스크롤"><table class="fc-tt fc-three"><thead>'+forecastHeader(bins,false,'3시간')+'</thead><tbody>'+threeRows(bins)+'</tbody></table></div>';
   }
   function syncForecastMapSize() {
     var map=$('fmap'); if(!map || !S.map) return;
@@ -239,7 +268,7 @@
     var box=$('fc-tail'); if (!box) return;
     if (!S.pin || S.tailClosed) { box.hidden=true; syncForecastMapSize(); return; }
     var d=S.tailData, k=S.pin.split(',');
-    box.innerHTML='<div class="fc-pin-in"><div class="fc-pin-head"><b><span class="fc-period">3시간</span><span class="fc-place">'+esc(cellName(+k[0],+k[1]))+'</span></b><button class="fc-tail-x" type="button" aria-label="이후 예보 닫기">×</button></div><div class="fc-tail-body">'+
+    box.innerHTML='<button class="fc-x fc-tail-x" type="button" aria-label="3시간 예보 닫기">×</button><div class="fc-pin-in"><div class="fc-tail-body">'+
       (S.tailError?'<p>이후 예보를 불러오지 못했습니다. <button type="button" data-tail-retry>다시 받기</button></p>':!d?'<p role="status">이후 예보를 불러오는 중…</p>':d.status!=='ok'?'<p>최신 예보 자료가 없습니다.</p>':tailTables(d))+
       '</div></div><span class="fc-pin-grip l" data-grip="l"></span><span class="fc-pin-grip r" data-grip="r"></span>';
     box.hidden=false;
@@ -341,8 +370,7 @@
     if(S.tailData && S.tailData.status==='ok') { var hourly=window.ForecastSeries.hourlyAll(S.tailData);sr=hourly.series; start=hourly.start_at; }
     renderTail();
     var k = S.pin.split(','), g = S.grid[S.hq], c = g && g.cells ? g.cells.filter(function (x) { return x[0] === +k[0] && x[1] === +k[1]; })[0] : null;
-    box.innerHTML = '<div class="fc-pin-in"><div class="fc-pin-head"><b><span class="fc-period">1시간</span><span class="fc-place">' + esc(cellName(+k[0], +k[1])) + '</span></b>' +
-      '<button type="button" class="fc-pin-x" aria-label="닫기">×</button></div>' + trendBox(sr, start, true) +
+    box.innerHTML = '<button type="button" class="fc-x fc-pin-x" aria-label="1시간 예보 닫기">×</button><div class="fc-pin-in">' + trendBox(sr, start, true) +
       '</div>' +
       '<span class="fc-pin-grip l" data-grip="l" aria-hidden="true"></span><span class="fc-pin-grip r" data-grip="r" aria-hidden="true"></span>';
     box.hidden = !!S.nearClosed; applyPinGeo();
@@ -495,8 +523,8 @@
       '</tbody></table></div>';
   }
   function renderLegend() {             // 범례(2026-10-10 간단히): 칸 숫자 순서 + 적설량 색띠만
-    $('fc-legend').innerHTML = S.focus ? '<span class="fc-show" role="group" aria-label="지도 칸에 보일 값">' + SHOW_ITEMS.map(function (x) {
-          return '<label class="fc-chk ' + x[0] + '"><input type="checkbox" data-fcshow="' + x[0] + '"' + (S.show[x[0]] ? ' checked' : '') + '>' + x[1] + '</label>'; }).join('') + '</span>' +
+    $('fc-legend').innerHTML = S.focus ? '<span class="fc-legend-t">24시간</span><span class="fc-show" role="group" aria-label="지도 칸에 보일 값(24시간)">' + SHOW_ITEMS.map(function (x) {
+          return '<label class="fc-chk ' + x[0] + '"><input type="checkbox" data-fcshow="' + x[0] + '"' + (S.show[x[0]] ? ' checked' : '') + '><span>' + x[1] + '</span></label>'; }).join('') + '</span>' +
         '<span class="fc-ramp"><span class="fc-ramp-t">적설량</span><ol>' + SCALE.slice().reverse().map(function (x) { return '<li><i style="background:' + x[1] + '"></i>' + esc(x[2]) + '</li>'; }).join('') + '</ol></span>'
       : '';
     $('fc-legend').style.display = S.focus ? '' : 'none';
@@ -535,6 +563,7 @@
     });
     $('view-forecast').addEventListener('click', function (e) {
       var t = e.target, h = t.closest && t.closest('[data-fchq]'); if (h) { setHq(S.hq === h.dataset.fchq ? 'ALL' : h.dataset.fchq); return; }
+      if (t.closest && t.closest('.fc-side-tog')) { toggleSide(); return; }
       var b = t.closest && t.closest('[data-fcbr]'); if (b) { focusBranch(b.dataset.fcbr); return; }
       if (t.closest && t.closest('.fc-tail-x')) { S.tailClosed=true; renderTail(); scheduleTail(); return; }
       if (t.closest && t.closest('[data-tail-retry]')) { S.tailKey=null; ensureTail(); return; }

@@ -19,6 +19,8 @@
 /* 범례: 칸 숫자 순서(지도 칸의 글자와 같은 모양) + 적설량 색띠 */
 .fc-show{display:inline-flex;flex-wrap:wrap;gap:2px 10px;}
 .jr-legend label.fc-chk{display:inline-flex;align-items:center;gap:4px;margin:0;padding:3px 2px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;}
+.fc-chk span{display:inline-block;line-height:1.05;text-align:center;}      /* 최대/확률·최저/기온 두 줄 */
+.fc-legend-t{font-weight:800;font-size:12.5px;color:var(--ink);align-self:center;}
 .fc-chk input{width:15px;height:15px;margin:0;accent-color:var(--accent);cursor:pointer;}
 .fc-chk.s{color:#1d4fa0;} .fc-chk.p{color:#2f7d4f;} .fc-chk.o{color:#1f7a8c;} .fc-chk.t{color:#b0392b;}
 .fc-ramp{display:inline-flex;align-items:center;gap:8px;}
@@ -46,6 +48,10 @@
 /* 격자 마우스·고정: 24시간 추이 표(그림 대신). 마우스 말풍선 283px(=236×1.2), 고정 창 396px(=330×1.2) */
 .leaflet-tooltip.fc-tip{max-width:none;background:#fff;z-index:700;}
 .fc-trend-box{margin-top:4px;display:flex;flex-direction:column;gap:6px;width:283px;}
+.fc-trend-box:not(.big){width:auto;min-width:283px;}
+.fc-tt.fc-t3{width:auto;min-width:100%;table-layout:auto;}
+.fc-t3 td{padding:2px 4px;min-width:34px;}
+.fc-t3 td.fc-qual{background:#edf5fb;color:#24405c;}      /* 말풍선: 3시간 창과 같은 강도 글자라 폭은 내용대로 */
 .fc-trend-box.big{width:396px;}
 .fc-tt{width:100%;border-collapse:collapse;table-layout:fixed;font-family:var(--mono);font-size:11px;}
 .fc-tt th,.fc-tt td{border:1px solid #d6e1e9;padding:2px 1px;text-align:center;white-space:nowrap;overflow:hidden;}
@@ -55,7 +61,6 @@
 .fc-tt th.lb small{font-weight:700;font-size:10px;color:#3d5568;margin-left:1px;letter-spacing:0;}      /* 2026-11-09 사용자: 단위가 잘 보이게(진하게·크게), '강수확률%' 가 넘치지 않게 자간을 줄임 */
 .fc-tt th.s{color:#2e5fb8;} .fc-tt th.p{color:#2f7d4f;} .fc-tt th.o{color:#1f7a8c;} .fc-tt th.t{color:#b0392b;}
 .fc-tt td.v{font-weight:700;} .fc-tt td.z{color:#aaa;} .fc-tt td.neg{color:#1d5fb0;}
-.fc-tt-cap{font-size:10px;color:#777;margin-top:-3px;}
 .fc-tt-sum{font-size:11px;color:#333;} .fc-tt-sum b{font-family:var(--mono);}
 .fc-trend-key{font-size:10.5px;color:#777;margin-top:2px;}
 /* 격자를 눌러 고정한 그림(지도 오른쪽 위) */
@@ -63,7 +68,6 @@
 .fc-pin[hidden]{display:none;}
 .fc-pin{animation:fcPop .15s ease-out;} @keyframes fcPop{from{opacity:0;transform:scale(.97)}}
 @media (prefers-reduced-motion: reduce){.fc-pin{animation:none}}
-.fc-pin-head{display:flex;align-items:center;gap:6px;font-size:12.5px;margin-bottom:2px;}
 .fc-pin-x{margin-left:auto;border:0;background:none;font-size:18px;line-height:1;cursor:pointer;color:#555;padding:0 2px;}
 .fc-pin-note{font-size:10.5px;color:#777;margin-top:2px;}
 .fc-no{color:#888;font-weight:400;font-size:10px;margin-left:3px;font-family:var(--mono);}
@@ -72,10 +76,9 @@
 
 /* 초단기예보 값인 칸(앞 6시간)은 vs 표시만 남기고 색칠하지 않음(2026-11-09 사용자: 다른 칸과 같은 형식) */
 /* 고정 창: 제목을 끌어 이동, 아래 모서리로 크기 조절(컴퓨터 화면만, 폭·글자 배율은 ui.js) */
-.fc-pin-head{cursor:move;user-select:none;touch-action:none;}
 .fc-pin-x{cursor:pointer;}
 .fc-pin-in{width:396px;}
-.fc-pin-grip{position:absolute;bottom:0;width:16px;height:16px;touch-action:none;}
+.fc-pin-grip{position:absolute;bottom:0;width:16px;height:16px;touch-action:none;z-index:4;}      /* 표 왼쪽 고정 칸(sticky)보다 위 */
 .fc-pin-grip.r{right:0;cursor:nwse-resize;background:linear-gradient(135deg,transparent 55%,#7a8a97 55%,#7a8a97 63%,transparent 63%,transparent 75%,#7a8a97 75%,#7a8a97 83%,transparent 83%);border-bottom-right-radius:8px;}
 .fc-pin-grip.l{left:0;cursor:nesw-resize;background:linear-gradient(225deg,transparent 55%,#7a8a97 55%,#7a8a97 63%,transparent 63%,transparent 75%,#7a8a97 75%,#7a8a97 83%,transparent 83%);border-bottom-left-radius:8px;}
 body.fc-pin-moving{user-select:none;}
@@ -93,7 +96,6 @@ body.fc-pin-moving{user-select:none;}
   .fc-detail th{font-size:10.5px;}
   .fc-pin-in{width:auto;}
   .fc-pin-grip,.fc-pin-how{display:none;}
-  .fc-pin-head{cursor:default;touch-action:auto;user-select:auto;}
   .fc-pin{top:8px;left:8px;right:8px;padding:6px 8px;max-height:calc(100% - 16px);overflow:auto;box-sizing:border-box;z-index:1100;}
   .fc-trend-box.big{width:100%;}
   .fc-tt{font-size:10px;}
@@ -109,8 +111,6 @@ body.fc-pin-moving{user-select:none;}
 .fc-pin .fc-tt thead th,.fc-tail .fc-tt thead th{background:#24405c;color:#fff;border-color:#60788c;padding:5px 2px;font-weight:700;}
 .fc-pin .fc-tt thead th small,.fc-tail .fc-tt thead th small{color:#e0eaf1;}
 .fc-pin .fc-tt tbody th,.fc-tail .fc-tt tbody th{background:#dce6ee;color:#213d52;border-right:2px solid #70879a;}
-.fc-pin-head{background:#24405c;color:#fff;padding:7px;border-radius:4px;margin-bottom:8px;}
-.fc-pin-head .fc-no,.fc-pin-head .fc-pin-br,.fc-pin-head button{color:#fff;}
 .fc-tail{position:absolute;left:10px;bottom:10px;z-index:801;background:#fff;border:1px solid #33424f;border-radius:8px;padding:8px 10px;box-shadow:0 4px 14px #10243a2e;max-height:70%;overflow:auto;}
 .fc-tail[hidden]{display:none;}
 .fc-tail-x{margin-left:auto;border:0;background:none;color:#fff;font-size:18px;cursor:pointer;}
@@ -124,7 +124,6 @@ body.fc-pin-moving{user-select:none;}
  .fc-tail .fc-pin-in{width:auto;}
 }
 
-.fc-tail .fc-pin-head{color:#fff;}
 .fc-tail[style*="top"]{bottom:auto;}
 @media(min-width:761px){.fc-pin,.fc-tail{max-height:45%;overflow:auto;}}
 @media(max-width:760px){
@@ -172,7 +171,6 @@ body.fc-pin-moving{user-select:none;}
   .fc-mobile>.fc-pin,.fc-mobile>.fc-tail,.fc-mobile>.fc-daily{position:static;max-height:none!important;max-width:none;width:100%;padding:6px 2px;border:0;box-shadow:none;overflow:visible;box-sizing:border-box;}
   .fc-mobile .fc-pin-in{width:auto;zoom:1!important;}
   .fc-mobile .fc-pin-x,.fc-mobile .fc-tail-x,.fc-mobile .fc-daily-x{display:none;}
-  .fc-mobile .fc-pin-head{font-size:12px;padding:5px;}
   .fc-mobile[data-active=hourly]>#fc-tail,.fc-mobile[data-active=hourly]>#fc-daily,
   .fc-mobile[data-active=three]>#fc-pin,.fc-mobile[data-active=three]>#fc-daily,
   .fc-mobile[data-active=daily]>#fc-pin,.fc-mobile[data-active=daily]>#fc-tail{display:none;}
@@ -185,11 +183,6 @@ body.fc-pin-moving{user-select:none;}
 @media(min-width:761px){
   .fc-pin,.fc-tail,.fc-daily{padding:5px 6px;overflow:hidden;max-height:none;}
   .fc-pin-in{display:flex;align-items:stretch;gap:5px;width:440px;}
-  .fc-pin-head{flex:0 0 64px;min-width:0;margin:0;padding:6px 3px;flex-direction:column;justify-content:space-between;align-items:center;box-sizing:border-box;}
-  .fc-pin-head b{display:flex;flex-direction:column;gap:7px;text-align:center;max-width:100%;}
-  .fc-period{font-size:12px;white-space:nowrap;}
-  .fc-place{font-size:10px;font-weight:400;line-height:1.3;overflow-wrap:anywhere;}
-  .fc-pin-head button{margin:0;}
   .fc-pin .fc-trend-box.big,.fc-tail-body,.fc-daily-body{flex:1;min-width:0;width:0;}
   .fc-scroll{padding-bottom:0;}
   .fc-pin .fc-tt,.fc-tail .fc-tt{margin:0;font-size:11px;}
@@ -199,10 +192,30 @@ body.fc-pin-moving{user-select:none;}
 }
 @media(max-width:760px){
   .fc-mobile{top:50%;bottom:auto;transform:translateY(-50%);max-height:calc(100dvh - 100px);}
-  .fc-mobile .fc-pin-head{display:none;}
   .fc-mobile-head [role=tablist]{flex:none;gap:3px;}
   .fc-mobile-head [role=tab]{padding:6px 5px;font-size:11px;white-space:nowrap;}
   .fc-mobile-location{flex:1;min-width:0;font-size:11px;line-height:1.3;overflow-wrap:anywhere;}
   .fc-mobile-head{gap:5px;}
   .fc-mobile-head .fc-mobile-close{padding:1px 3px;}
 }
+
+/* 2026-11-09 사용자: 창 왼쪽 제목 칸을 없애고 × 는 창마다 오른쪽 위 모서리. 옮기기는 표 왼쪽 항목 칸·창 테두리를 끌기 */
+.fc-x{position:absolute;top:-10px;right:-10px;width:22px;height:22px;border-radius:50%;border:1px solid #fff;background:#24405c;color:#fff;font-size:15px;line-height:1;padding:0;margin:0;cursor:pointer;z-index:3;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 4px rgba(16,36,58,.35);}
+.fc-x:hover,.fc-x:focus-visible{background:#c02024;}
+@media(min-width:761px){
+  .fc-pin,.fc-tail,.fc-daily{overflow:visible;}
+  .fc-pin th.lb,.fc-tail th.lb,.fc-daily th.lb{cursor:move;user-select:none;touch-action:none;}
+}
+/* 날짜가 바뀌는 칸: 진한 선(머리글은 어두운 바탕이라 밝은 선) */
+.fc-tt td.dl,.fc-tt tbody th.dl,.fc-daily-table td.dl{border-left:2px solid #24405c !important;}
+.fc-tt thead th.dl,.fc-daily-table thead th.dl{border-left:2px solid #c8d6e2 !important;}
+/* 왼쪽 기관별 예보 목록 접기 */
+.fc-side-tog{flex:none;border:1px solid var(--line);background:#fff;border-radius:6px;padding:2px 8px;cursor:pointer;font-size:12px;line-height:1.4;color:var(--ink);}
+.fc-side-tog:hover{background:var(--ice,#eef5fb);}
+@media(min-width:761px){
+  #view-forecast .jr-side.fold{width:40px;min-width:40px;}
+  #view-forecast .jr-side.fold>:not(.jr-head){display:none;}
+  #view-forecast .jr-side.fold .jr-head{flex-direction:column-reverse;justify-content:flex-end;padding:10px 4px;gap:10px;}
+  #view-forecast .jr-side.fold .jr-head b{writing-mode:vertical-rl;letter-spacing:.1em;font-size:14px;}
+}
+@media(max-width:760px){#view-forecast .jr-side.fold>:not(.jr-head){display:none;} #view-forecast .jr-side.fold{max-height:none;}}

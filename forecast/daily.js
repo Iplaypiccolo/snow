@@ -19,12 +19,12 @@
     periods.forEach(function(p){var h=new Date(Date.parse(p.forecast_at)+9*3600000).getUTCHours();if(p.period_hours===24)a=[p,p];else if(h===0||h===12)a[h===0?0:1]=p;});return a;
   }
   function table(data){
-    var days=(data.days||[]).slice(0,7),html='<div class="fc-scroll" tabindex="0" aria-label="일별 예보 가로 스크롤"><table class="fc-daily-table"><thead><tr><th rowspan="2" class="lb">날짜<br>시간</th>';
-    days.forEach(function(day){var d=new Date(day.date+'T00:00:00Z'),w=d.getUTCDay();html+='<th colspan="2" class="'+(w===0?'fc-sun':w===6?'fc-sat':'')+'">'+(d.getUTCMonth()+1)+'/'+d.getUTCDate()+'('+'일월화수목금토'[w]+')</th>';});
-    html+='</tr><tr>';days.forEach(function(day){var h=halves(day);html+=h[0]&&h[0]===h[1]?'<th colspan="2">하루</th>':'<th>오전</th><th>오후</th>';});html+='</tr></thead><tbody>';
+    var days=(data.days||[]).slice(0,7),html='<div class="fc-scroll" tabindex="0" aria-label="일별 예보 가로 스크롤"><table class="fc-daily-table"><thead><tr><th rowspan="2" class="lb">일별</th>';
+    days.forEach(function(day,di){var d=new Date(day.date+'T00:00:00Z'),w=d.getUTCDay();html+='<th colspan="2" class="'+(w===0?'fc-sun':w===6?'fc-sat':'')+(di?' dl':'')+'">'+(d.getUTCMonth()+1)+'/'+d.getUTCDate()+'('+'일월화수목금토'[w]+')</th>';});
+    html+='</tr><tr>';days.forEach(function(day,di){var h=halves(day),dl=di?' class="dl"':'';html+=h[0]&&h[0]===h[1]?'<th colspan="2"'+dl+'>하루</th>':'<th'+dl+'>오전</th><th>오후</th>';});html+='</tr></thead><tbody>';
     ['weather','temperature','pop'].forEach(function(row){
       html+='<tr><th class="lb">'+{weather:'날씨',temperature:'최저·최고<br>℃',pop:'강수확률'}[row]+'</th>';
-      days.forEach(function(day){var hs=halves(day),whole=hs[0]&&hs[0]===hs[1];hs.forEach(function(p,i){
+      days.forEach(function(day,di){var hs=halves(day),whole=hs[0]&&hs[0]===hs[1];hs.forEach(function(p,i){
         if(row!=='temperature'&&whole&&i===1)return;
         var span=row!=='temperature'&&whole?' colspan="2"':'',value='-';
         if(row==='temperature'){
@@ -34,7 +34,7 @@
           if(row==='weather')value='<span class="fc-weather-icon" aria-hidden="true">'+icon(p)+'</span><span class="fc-weather-name">'+esc(p.weather)+'</span>';
           else if(p.pop!=null)value=esc(p.pop)+'%';
         }
-        html+='<td'+span+' class="'+(row==='temperature'?(i===0?'fc-low':'fc-high'):'')+'">'+value+'</td>';
+        html+='<td'+span+' class="'+(row==='temperature'?(i===0?'fc-low':'fc-high'):'')+(di&&i===0?' dl':'')+'">'+value+'</td>';      // dl = 날짜가 바뀌는 칸(진한 선)
       });});html+='</tr>';
     });
     return html+'</tbody></table></div>';
@@ -93,8 +93,8 @@
       box.hidden=!D.key||D.closed;if(box.hidden)return;
       if(D.geo.scale==null)D.geo.scale=window.ForecastUI.pinDefault;      // 기본 배율은 ui.js 한 곳에만
       var state=window.ForecastUI._state(),panels=ids.map(function(id,i){return{el:$(id),geo:[state.pinGeo,state.tailGeo,D.geo][i]};}).filter(function(p){return !p.el.hidden&&p.el.querySelector('.fc-pin-in');});
-      var total=0,overhead=0;
-      panels.forEach(function(p){p.el.style.maxHeight='none';p.el.style.bottom='auto';p.inner=p.el.querySelector('.fc-pin-in');p.inner.style.zoom=p.geo.scale;total+=p.el.offsetHeight;overhead+=p.el.offsetHeight-p.inner.getBoundingClientRect().height;});
+      var total=0,overhead=0;      // geo.w = 가로로 늘린 표 폭(배율 1 기준, 2026-11-09)
+      panels.forEach(function(p){p.el.style.maxHeight='none';p.el.style.bottom='auto';p.inner=p.el.querySelector('.fc-pin-in');p.inner.style.zoom=p.geo.scale;p.inner.style.width=p.geo.w?p.geo.w+'px':'';total+=p.el.offsetHeight;overhead+=p.el.offsetHeight-p.inner.getBoundingClientRect().height;});
       var legend=$('fc-legend'),room=root.clientHeight-20-(legend?legend.offsetHeight:0)-Math.max(0,panels.length-1)*8;
       var factor=Math.min(1,Math.max(0.1,(room-overhead-2)/Math.max(1,total-overhead))),top=10;
       // 2026-11-09: 창 기본 배율 1.2 — 폭도 지도 왼쪽 여유(최대 160px)를 남기게, 줄 높이 반올림으로 넘치면 한 번 더 줄임
@@ -113,7 +113,7 @@
   }
   function render(){
     var box=$('fc-daily');if(!box)return;var scroll=box.querySelector('.fc-scroll'),left=scroll?scroll.scrollLeft:0;
-    box.innerHTML='<div class="fc-pin-in"><div class="fc-pin-head"><b><span class="fc-period">일별</span><span class="fc-place">'+esc(D.name)+'</span></b><button type="button" class="fc-daily-x" aria-label="일별 예보 닫기">×</button></div><div class="fc-daily-body">'+
+    box.innerHTML='<button type="button" class="fc-x fc-daily-x" aria-label="일별 예보 닫기">×</button><div class="fc-pin-in"><div class="fc-daily-body">'+
       (D.data?table(D.data)+(D.error?'<p class="fc-daily-source">갱신 지연 <button type="button" data-daily-retry>다시 받기</button></p>':''):D.error?'<p>일별 예보를 불러오지 못했습니다. <button type="button" data-daily-retry>다시 받기</button></p>':'<p role="status">일별 예보를 불러오는 중…</p>')+
       '</div></div><span class="fc-pin-grip l" data-grip="l"></span><span class="fc-pin-grip r" data-grip="r"></span>';
     layout();scroll=box.querySelector('.fc-scroll');if(scroll)scroll.scrollLeft=left;
