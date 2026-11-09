@@ -44,6 +44,13 @@
 
 ## 기록 (최신이 맨 위)
 
+### 2026-11-09 · 커밋 (이 기록 커밋 하나) · 예보 2단계: 옛 발표분 시간별 값 정리·격자 창 계산 한 번 (SQL82 승인 적용)
+- 사용자 "적용해" 승인 후 `supabase/migrations/20261109_82_forecast_trim_and_single_pass.sql` 적용.
+- `fc_progress`: 새 발표분이 done 이 되면 `forecast_hours` 에서 그보다 옛 발표분 값을 지움. 받는 중에는 직전 완성 발표분이 남음. **`forecast_runs` 목록은 지우지 않음** — `forecast_daily_aux_hours`(일별 최저·최고기온, 48시간)가 FK cascade 로 묶여 있어 지우면 오늘 최저기온(새벽 발표분에만 있음)이 사라짐.
+- 기존 옛 값 13,525줄 정리(13,965 → 440줄). 적용 전 되돌리는 시험에서 지운 뒤에도 고르는 발표분 61/61시간 같음.
+- `forecast_cell_detail`: `forecast_cell_tail` 을 부른 뒤 `fc_hours` 를 또 돌리던 것을 한 번으로(본문에 tail 계산을 옮김, `forecast_cell_tail` 은 호환용으로 그대로). 격자 121곳 응답 jsonb 완전 일치, 시간 13.3초 → 7.0초(한 번 0.11 → 0.06초). 권한(authenticated 가능·anon 불가) 유지 확인.
+— ✍ Claude Code 작성
+
 ### 2026-11-09 · 커밋 (이 기록 커밋 하나) · 예보 1단계: 미완성 초단기·빈 시각·시각 계산·수집 오류 기록 (SQL81 승인 적용)
 - 사용자 "실행해" 승인 후 적용. 순서: 수집 함수 `collect-forecast` v7 먼저(옛 서버에서도 동작) → `supabase/migrations/20261109_81_forecast_incomplete_runs.sql` → 24시간 예보 다시 계산.
 - 초단기: 기온(T1H) 유효 칸(-90 초과)이 모두 0 인 시각 = 미완성 발표분. `forecast_vsrt_put` 이 그 발표분 받은 값을 지우고 `{incomplete:true}` → 수집기는 한 칸 앞 발표분. `forecast_vsrt_begin` 은 기온을 마지막 시각부터 먼저 요청. `fc_apply` 는 그런 시각이 있는 발표분을 섞지 않음(61의 `q <> 0` 이 결측 -99 로 통과되던 것 수정). 11/9 08:00·10:00 정각 발표분에서 관찰, 10:10 은 정상.
