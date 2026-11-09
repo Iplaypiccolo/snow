@@ -51,8 +51,8 @@
 .fc-tt th,.fc-tt td{border:1px solid #d6e1e9;padding:2px 1px;text-align:center;white-space:nowrap;overflow:hidden;}
 .fc-tt thead th{background:#eef3f7;font-weight:700;color:#444;line-height:1.1;}
 .fc-tt thead th small{display:block;font-weight:400;font-size:8.5px;color:#888;}
-.fc-tt th.lb{width:66px;text-align:left;padding-left:3px;font-family:inherit;font-weight:700;font-size:10.5px;background:#f3f7fa;}
-.fc-tt th.lb small{font-weight:700;font-size:10px;color:#3d5568;margin-left:2px;}      /* 2026-11-09 사용자: 단위가 잘 보이게(진하게·크게) */
+.fc-tt th.lb{width:66px;text-align:left;padding-left:3px;font-family:inherit;font-weight:700;font-size:10.5px;background:#f3f7fa;letter-spacing:-0.08em;}
+.fc-tt th.lb small{font-weight:700;font-size:10px;color:#3d5568;margin-left:1px;letter-spacing:0;}      /* 2026-11-09 사용자: 단위가 잘 보이게(진하게·크게), '강수확률%' 가 넘치지 않게 자간을 줄임 */      /* 2026-11-09 사용자: 단위가 잘 보이게(진하게·크게) */
 .fc-tt th.s{color:#2e5fb8;} .fc-tt th.p{color:#2f7d4f;} .fc-tt th.o{color:#1f7a8c;} .fc-tt th.t{color:#b0392b;}
 .fc-tt td.v{font-weight:700;} .fc-tt td.z{color:#aaa;} .fc-tt td.neg{color:#1d5fb0;}
 .fc-tt-cap{font-size:10px;color:#777;margin-top:-3px;}
@@ -99,7 +99,7 @@ body.fc-pin-moving{user-select:none;}
   .fc-trend-box.big{width:100%;}
   .fc-tt{font-size:10px;}
   .fc-tt th,.fc-tt td{padding:2px 0;}
-  .fc-tt th.lb{width:46px;padding-left:2px;font-size:10px;white-space:normal;line-height:1.15;}
+  .fc-tt th.lb{width:48px;padding-left:2px;font-size:10px;white-space:normal;line-height:1.15;letter-spacing:-0.1em;}
   .fc-tt th.lb small{display:block;font-size:9.5px;margin:0;}      /* 휴대폰: 단위는 이름 아래 줄 */
   .fc-trend-box{width:min(283px,calc(100vw - 48px));}
   .leaflet-tooltip.fc-tip{white-space:normal;}
@@ -117,7 +117,7 @@ body.fc-pin-moving{user-select:none;}
 .fc-tail-x{margin-left:auto;border:0;background:none;color:#fff;font-size:18px;cursor:pointer;}
 .fc-tail .fc-tt{margin-bottom:8px;font-size:11px;}
 .fc-tail .fc-tt thead th{white-space:normal;line-height:1.5;}
-.fc-tail .fc-tt th.lb{width:68px;white-space:normal;}
+.fc-tail .fc-tt th.lb{width:68px;white-space:normal;letter-spacing:-0.08em;}
 .fc-tail .fc-tt td{padding:5px 2px;}
 @media(max-width:760px){
  .fc-pin{max-height:46%;}

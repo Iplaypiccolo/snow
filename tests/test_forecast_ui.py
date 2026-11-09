@@ -814,6 +814,9 @@ def t_centered_mobile_label(b):
         r=p.locator('#fc-mobile').bounding_box()
         check(abs(r['y']+r['height']/2-406)<2,'휴대폰창세로중앙')
         check(p.locator('#fc-mobile .fc-pin-head:visible').count()==0,'패널별중복제목없음')
+        if tab in ('hourly','three'):
+            clipped=J(p,"Array.from(document.querySelectorAll('#fc-mobile th.lb')).filter(x=>x.offsetParent&&x.scrollWidth>x.clientWidth+1).map(x=>x.textContent)")
+            check(not clipped,f'2026-11-09: 휴대폰 항목 이름이 칸 밖으로 안 나감({tab}) {clipped}')
         label=p.locator('.fc-mobile-location').inner_text()
         check(bool(label) and not re.search(r'\d+\s*,\s*\d+',label) and '예보' not in label,'탭옆지명·지사만표시')
     p.locator('.fc-detail tbody tr').nth(1).click()
@@ -831,6 +834,8 @@ def t_hourly_48_without_hover_notes(b):
     check(rows.nth(0).locator('td').nth(24).inner_text()=='1' and rows.nth(0).locator('td').nth(25).inner_text()=='-','추가시간별원값·결측보존')
     check(rows.nth(1).locator('td').nth(24).inner_text()=='2' and rows.nth(3).locator('td').nth(24).inner_text()=='-2','시간별강수기온원값')
     p.wait_for_selector('#fc-daily table')
+    clipped=J(p,"Array.from(document.querySelectorAll('#fc-pin th.lb,#fc-tail th.lb')).filter(x=>x.scrollWidth>x.clientWidth+1).map(x=>x.textContent)")
+    check(not clipped,f'2026-11-09: 항목 이름(강수확률% 등)이 칸 밖으로 안 나감 {clipped}')
     for root in ['#fc-pin','#fc-tail','#fc-daily']:
         check(p.locator(root+' [title]').count()==0 and p.locator(root+' svg title').count()==0,'모든모달마우스설명없음 '+root)
         check('정성' not in p.locator(root).inner_text(),'정성예보문구없음 '+root)
