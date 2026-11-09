@@ -68,6 +68,17 @@ await test('초단기: 아직 안 나온 발표분은 실패가 아니라 한 �
   assert.deepEqual(w.begun, ['2026-11-03T00:20:00+00:00', '2026-11-03T00:10:00+00:00']); assert.equal(w.fetched.length, 19); assert.equal(r.j.tmfc, '202611030910');
   assert.equal(w.vfails.length, 0); assert.equal(r.j.ok, true);
 });
+await test('초단기(81): 서버가 미완성 발표분이라 하면 그 발표분을 버리고 한 칸 앞, 실패 기록 없음', async () => {
+  const w = vworld(); w.deps.store.vsrtPut = async (t, v, h, vals) => { w.vputs.push([t, v, h, vals]); return { data: t.includes('00:20') ? { ok: true, incomplete: true } : { ok: true, done: w.vputs.filter((x) => !x[0].includes('00:20')).length === 18 }, error: null }; };
+  const r = await call(w, { token: 'tok' }, '{"vsrt":true}');
+  assert.deepEqual(w.begun, ['2026-11-03T00:20:00+00:00', '2026-11-03T00:10:00+00:00']); assert.equal(w.fetched.length, 19); assert.equal(r.j.tmfc, '202611030910');
+  assert.equal(r.j.done, true); assert.equal(r.j.hours, 18); assert.equal(w.vfails.length, 0); assert.equal(r.j.ok, true);
+});
+await test('초단기(81): 후보가 모두 미완성이면 조용히 끝(다음 예약 때 다시)', async () => {
+  const w = vworld(); w.deps.store.vsrtPut = async (t, v, h, vals) => { w.vputs.push([t, v, h, vals]); return { data: { ok: true, incomplete: true }, error: null }; };
+  const r = await call(w, { token: 'tok' }, '{"vsrt":true}');
+  assert.equal(w.fetched.length, 3); assert.equal(w.vfails.length, 0); assert.equal(r.j.waiting, true); assert.equal(r.j.ok, true);
+});
 await test('초단기: 후보가 모두 안 나왔으면 조용히 끝(다음 예약 때)', async () => {
   const w = vworld(); w.resp = () => NOT_READY; const r = await call(w, { token: 'tok' }, '{"vsrt":true}');
   assert.equal(w.fetched.length, 3); assert.equal(w.vputs.length, 0); assert.equal(w.vfails.length, 0); assert.equal(r.j.ok, true); assert.equal(r.j.waiting, true);
@@ -167,6 +178,10 @@ await test('신적설도 동일한 지정 시각으로 조회, 요약에 인증�
   const w = world({ response: { status: 200, text: snowy } }), r = await call(w, { ...good, probe: 'SNO' });
   assert.equal(r.data.stats.max, 2); assert.equal(r.data.all_zero, false); assert.equal(w.calls.length, 1); assert.equal(w.mutations, 0); assert.ok(!JSON.stringify(r.data).includes(w.key));
 });
+await test('지정 시각 조사(81): 바다 칸 -99 섞인 0 격자도 all_zero', async () => {
+  const a = Array(NX * NY).fill('0'); a[5] = '-99'; const w = world({ response: { status: 200, text: a.join(',') } }), r = await call(w, good);
+  assert.equal(r.data.all_zero, true); assert.equal(w.mutations, 0);
+});
 await test('비관리자와 비로그인 조회 차단', async () => {
   for (const [w, auth] of [[world({ role: 'viewer' }), true], [world(), false]]) { assert.equal((await call(w, good, auth)).status, 401); assert.equal(w.calls.length, 0); }
 });
@@ -207,6 +222,24 @@ await test('확장: 전국 TMP가0이면5종을 건너뛰고 같은 시각을 �
   w.resp = () => ({ status: 200, text: Array(NX*NY).fill('0').join(',') });
   const skipped=[]; w.deps.store.skip=async (t,h) => { skipped.push(h); return { data:{ok:true,done:false},error:null }; };
   const r=await call(w); assert.deepEqual(skipped,[h]);assert.equal(w.fetched.length,1);assert.equal(w.puts.length,0);assert.equal(r.j.missing,0);
+});
+await test('확장(81): 실제 격자처럼 바다 칸이 -99 이고 나머지가 모두 0 이어도 빈 시각', async () => {
+  const w = world(); const h = w.plan.start_at; w.plan.extended = true;
+  w.plan.missing = ['TMP','SNO','PCP','POP','PTY'].map(v => [v,h]);
+  const a = Array(NX*NY).fill('0'); for (let i = 0; i < a.length; i += 3) a[i] = '-99.00'; w.resp = () => ({ status: 200, text: a.join(',') });
+  const skipped=[]; w.deps.store.skip=async (t,h) => { skipped.push(h); return { data:{ok:true,done:false},error:null }; };
+  const r=await call(w); assert.deepEqual(skipped,[h]);assert.equal(w.fetched.length,1);assert.equal(w.puts.length,0);assert.equal(r.j.missing,0);
+});
+await test('확장(81): 모든 칸이 결측(-99)이면 빈 시각이 아님(형식 이상은 값으로 두고 서버가 판단)', async () => {
+  const w=world();w.plan.extended=true;w.plan.missing=[['TMP',w.plan.start_at]];w.resp=()=>({status:200,text:Array(NX*NY).fill('-99').join(',')});
+  w.deps.store.skip=async()=>{throw Error('must not skip');};await call(w);assert.equal(w.puts.length,1);
+});
+await test('수집 중 예상 못 한 오류(81): 원래 오류를 실패로 기록하고 오류 응답, 키는 가림', async () => {
+  const w=world();w.deps.store.plan=async()=>{throw Error('boom '+w.key);};const meters=[];w.deps.store.usage=async(...a)=>{meters.push(a);return true;};
+  const r=await call(w);assert.equal(r.status,500);assert.equal(r.j.ok,false);assert.equal(r.j.error,'exception');
+  assert.equal(w.fails.length,1);assert.ok(w.fails[0].includes('boom'));assert.ok(!w.fails[0].includes(w.key));assert.ok(!JSON.stringify(r.j).includes(w.key));
+  const v=vworld();v.deps.store.vsrtPlan=async()=>{throw Error('vboom');};const rv=await call(v,{token:'tok'},'{"vsrt":true}');
+  assert.equal(rv.status,500);assert.ok(v.vfails[0].includes('vboom'));assert.equal(v.fails.length,0);
 });
 await test('확장: 고른 지사만0이고 전국 다른 칸에 값이 있으면 빈 시각으로 보지 않음', async () => {
   const w=world();w.plan.extended=true;w.plan.missing=[['TMP',w.plan.start_at]];

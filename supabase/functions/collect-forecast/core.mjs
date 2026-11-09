@@ -11,6 +11,9 @@
 //  * 시험 호출 {"probe":"POP"}: 그 종류를 한 시각만 받아 요약(개수·최소·최대)만 돌려줌. 저장하지 않음 — 새 종류를 넣기 전에 기상청이 주는지 확인하는 용도
 //  * 초단기예보(마이그레이션 57): 본문 {"vsrt":true} → 10분 간격 발표분의 T1H·RN1·POP 6시각(18번)을 받아 forecast_vsrt_put. 단기예보 값은 건드리지 않음(화면에서 전환해 봄).
 //    아직 안 나온 발표분은 200 + '# dfs_file_read error' → 한 칸 앞 발표분을 받음(실패로 기록 안 함). 시험 호출 {"vsrt":true,"probe":"T1H"}: 저장 없이 요약만
+//    기온이 유효 칸 모두 0 인 시각이 오면(정각 발표분에서 2026-11-09 두 번 관찰) 서버가 {incomplete:true} → 그 발표분은 버리고 한 칸 앞(마이그레이션 81)
+//  * 빈 시각 판단: 결측(-90 이하, 바다 칸 -99 포함)을 뺀 유효 칸이 모두 0. 실제 격자는 바다 칸이 -99 라 '모든 칸이 유효' 조건은 맞지 않음(81)
+//  * 처리 중 예상 못 한 오류는 수집 실패(forecast_fail / forecast_vsrt_fail)에 남기고 오류 응답(키는 가림)
 //  * 순수 로직은 Node 로 시험: tests/test_collect_forecast.mjs
 // ============================================================
 export const GRID_URL = 'https://apihub.kma.go.kr/api/typ01/cgi-bin/url/nph-dfs_shrt_grd';
@@ -51,6 +54,8 @@ export function gridStats(text) {
   const good = v.filter((x) => x > -90), uniq = [...new Set(good)].sort((a, b) => a - b);
   return { n: v.length, ok: true, valid: good.length, min: good.length ? uniq[0] : null, max: good.length ? uniq[uniq.length - 1] : null, distinct: uniq.length, sample: uniq.slice(0, 12) };
 }
+// 빈 시각: 유효 칸이 있고 모두 0(바다 칸 -99 는 셈에서 뺌)
+export const allZero = (s) => !!(s && s.ok && s.valid > 0 && s.min === 0 && s.max === 0);
 
 async function allowed(req, deps) {
   const t = req.headers.get('x-collector-token');
@@ -100,6 +105,7 @@ async function collectVsrt(deps, key) {
       if (!vals) { lastErr = status === 'budget' ? '시간이 모자라 다음 예약 때 이어서' : status === 'format' ? '기상청 격자 형식이 다름(키·주소 확인)' : `기상청 응답 ${status || '연결 실패'} (초단기 ${v} ${kstHour(tmef)})`; break; }
       const { data: res, error: e2 } = await deps.store.vsrtPut(tmfc, v, tmef, vals);
       if (e2) { lastErr = 'DB 저장 실패'; break; }
+      if (res && res.incomplete) { notReady = true; put = 0; break; }   // 81: 미완성 발표분(서버가 받은 값을 지움) → 한 칸 앞
       put++; done = !!(res && res.done);
       if (done) break;
     }
@@ -127,11 +133,11 @@ async function probeAt(body, deps, key) {
   const stats = r.status === 200 ? gridStats(r.text) : null;
   return json(200, { ok: r.status === 200 && !!(stats && stats.ok), probe: v, tmfc: q.tmfc, tmef: q.tmef, status: r.status,
     response_bytes: new TextEncoder().encode(String(r.text || '')).byteLength, elapsed_ms: deps.now() - started,
-    all_zero: !!(stats && stats.ok && stats.valid === NX * NY && stats.min === 0 && stats.max === 0), stats });
+    all_zero: allZero(stats), stats });
 }
 
 // 실제 기상청 요청만 한국 날짜별로 계측. 조사 호출과 DB 계획 조회는 제외.
-async function withUsage(deps, vsrt, work) {
+async function withUsage(deps, vsrt, work, key) {
   const days = new Map(), seen = new Set();
   const measured = { ...deps, async fetchText(url) {
     const day = new Date(deps.now() + 9 * 3600e3).toISOString().slice(0, 10);
@@ -141,6 +147,11 @@ async function withUsage(deps, vsrt, work) {
   } };
   let response, saved = true;
   try { response = await work(measured); }
+  catch (e) {                                          // 81: 원래 오류를 수집 실패에 남김(키는 가림)
+    const note = ('수집 중 오류: ' + String((e && e.message) || e)).split(key).join('***').split(encodeURIComponent(key)).join('***').slice(0, 300);
+    try { await deps.store[vsrt ? 'vsrtFail' : 'fail'](note); } catch { /* 기록 실패는 응답에만 */ }
+    response = json(500, { ok: false, error: 'exception', note });
+  }
   finally {
     for (const [day, u] of days) {
       try { if (!deps.store.usage || await deps.store.usage(day, vsrt, u.calls, u.bytes, u.retries) !== true) saved = false; }
@@ -159,7 +170,7 @@ export async function handle(req, deps) {
   let body = {}; try { body = (await req.json()) || {}; } catch (e) { body = {}; }
   if (Object.prototype.hasOwnProperty.call(body, 'probeAt')) return probeAt(body, deps, key);
   if (!key) { await deps.store.fail('KMA_AUTH_KEY 비밀값이 없음'); return json(200, { ok: false, error: 'no_key' }); }
-  if (body.vsrt) return body.probe ? probeVsrt(body, deps, key) : withUsage(deps, true, (d) => collectVsrt(d, key));
+  if (body.vsrt) return body.probe ? probeVsrt(body, deps, key) : withUsage(deps, true, (d) => collectVsrt(d, key), key);
   if (body.probe) {                                   // 시험 호출: 한 시각만 받아 요약만(저장 안 함)
     const v = String(body.probe).toUpperCase();
     if (!PROBE_VARS.includes(v)) return json(400, { ok: false, error: 'bad_probe' });
@@ -172,7 +183,7 @@ export async function handle(req, deps) {
     return json(200, { ok: r.status === 200 && !!(stats && stats.ok), probe: v, status: r.status, tmfc: kstHour(pl.tmfc), tmef: kstHour(ef), stats, head });
   }
 
-  return withUsage(deps, false, (d) => collectShort(d, key));
+  return withUsage(deps, false, (d) => collectShort(d, key), key);
 }
 
 async function collectShort(deps, key) {
@@ -193,7 +204,7 @@ async function collectShort(deps, key) {
       if (i) await deps.sleep(RETRY_MS);
       const r = await deps.fetchText(url); status = r.status;
       vals = r.status === 200 ? pickCells(r.text, plan.cells) : null;
-      if (vals && plan.extended && v === 'TMP') { const s = gridStats(r.text); empty = !!(s && s.ok && s.valid === NX * NY && s.min === 0 && s.max === 0); }
+      if (vals && plan.extended && v === 'TMP') empty = allZero(gridStats(r.text));
       if (r.status === 200 && !vals) { status = 'format'; break; }        // 형식이 다르면(키 오류 안내문 등) 다시 해도 같음
     }
     if (!vals) { lastErr = status === 'budget' ? '시간이 모자라 다음 예약 때 이어서' : status === 'format' ? '기상청 격자 형식이 다름(키·주소 확인)' : `기상청 응답 ${status || '연결 실패'} (${v} ${kstHour(tmef)})`; break; }

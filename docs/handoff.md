@@ -44,6 +44,14 @@
 
 ## 기록 (최신이 맨 위)
 
+### 2026-11-09 · 커밋 (이 기록 커밋 하나) · 예보 1단계: 미완성 초단기·빈 시각·시각 계산·수집 오류 기록 (SQL81 승인 적용)
+- 사용자 "실행해" 승인 후 적용. 순서: 수집 함수 `collect-forecast` v7 먼저(옛 서버에서도 동작) → `supabase/migrations/20261109_81_forecast_incomplete_runs.sql` → 24시간 예보 다시 계산.
+- 초단기: 기온(T1H) 유효 칸(-90 초과)이 모두 0 인 시각 = 미완성 발표분. `forecast_vsrt_put` 이 그 발표분 받은 값을 지우고 `{incomplete:true}` → 수집기는 한 칸 앞 발표분. `forecast_vsrt_begin` 은 기온을 마지막 시각부터 먼저 요청. `fc_apply` 는 그런 시각이 있는 발표분을 섞지 않음(61의 `q <> 0` 이 결측 -99 로 통과되던 것 수정). 11/9 08:00·10:00 정각 발표분에서 관찰, 10:10 은 정상.
+- 단기: 빈 시각 판단을 "유효 칸 모두 0"으로(`allZero`, 수집기·`probeAt` 같음). 저장돼 있던 30개 발표분의 4일째 23시(기온 전 칸 0) 150줄을 빈 시각으로 표시만 바꿈.
+- `fc_end`: UTC+9 고정 계산(2026~2027 10분 간격 105,120개 결과 동일). `withUsage`: 예상 못 한 오류를 `forecast_fail`/`forecast_vsrt_fail` 에 남기고 500(키 가림).
+- 확인: 남은 최저기온 0℃ 8개 지사는 11/10 새벽 실제 예보(서서히 내려감). 시험 `tests/test_collect_forecast.mjs` 6개 추가, `supabase/tests/forecast_incomplete_81_test.sql`(운영에서 돌려도 되돌림, 통과).
+— ✍ Claude Code 작성
+
 ### 2026-11-09 · 커밋 (이 기록 커밋 하나) · 격자 창 표 시작 시각을 기상청처럼, 예보 문제 해결 계획
 - 서버 변경 없음. `forecast/series.js`: `skipHours`, `combine(data, skip)`. `forecast/ui.js`: `fcNow`, 1시간 표·3시간 표에 적용. 시험 `t_kma_start_hour`, 기존 시험은 `window.__fcNow` 로 매시 10분 고정.
 - `docs/forecast-fix-plan-20261109.md`: Codex 작업 검토 결과(초단기 미완성 발표분이 섞여 최저기온 0℃, 빈 시각 판단이 바다 칸 -99 때문에 실패, 격자 창 10분마다 전체 재조회, 옛 발표분 4~5일 보관 등)와 단계별 해결 계획. 아직 고치지 않음.
