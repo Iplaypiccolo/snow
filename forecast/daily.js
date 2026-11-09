@@ -23,7 +23,7 @@
     days.forEach(function(day,di){var d=new Date(day.date+'T00:00:00Z'),w=d.getUTCDay();html+='<th colspan="2" class="'+(w===0?'fc-sun':w===6?'fc-sat':'')+(di?' dl':'')+'">'+(d.getUTCMonth()+1)+'/'+d.getUTCDate()+'('+'일월화수목금토'[w]+')</th>';});
     html+='</tr><tr>';days.forEach(function(day,di){var h=halves(day),dl=di?' class="dl"':'';html+=h[0]&&h[0]===h[1]?'<th colspan="2"'+dl+'>하루</th>':'<th'+dl+'>오전</th><th>오후</th>';});html+='</tr></thead><tbody>';
     ['weather','temperature','pop'].forEach(function(row){
-      html+='<tr><th class="lb">'+{weather:'날씨',temperature:'최저·최고<br>℃',pop:'강수확률'}[row]+'</th>';
+      html+='<tr><th class="lb">'+{weather:'날씨',temperature:'최저·최고℃',pop:'강수확률'}[row]+'</th>';
       days.forEach(function(day,di){var hs=halves(day),whole=hs[0]&&hs[0]===hs[1];hs.forEach(function(p,i){
         if(row!=='temperature'&&whole&&i===1)return;
         var span=row!=='temperature'&&whole?' colspan="2"':'',value='-';
@@ -90,25 +90,8 @@
       box.hidden=!D.key;var phoneInner=box.querySelector('.fc-pin-in');if(phoneInner)phoneInner.style.zoom='';
     }else{
       mobile.hidden=true;ids.forEach(function(id){var el=$(id);if(el.parentNode!==root)root.appendChild(el);el.removeAttribute('role');el.removeAttribute('aria-hidden');el.removeAttribute('aria-labelledby');});
-      box.hidden=!D.key||D.closed;if(box.hidden)return;
-      if(D.geo.scale==null)D.geo.scale=window.ForecastUI.pinDefault;      // 기본 배율은 ui.js 한 곳에만
-      var state=window.ForecastUI._state(),panels=ids.map(function(id,i){return{el:$(id),geo:[state.pinGeo,state.tailGeo,D.geo][i]};}).filter(function(p){return !p.el.hidden&&p.el.querySelector('.fc-pin-in');});
-      var total=0,overhead=0;      // geo.w = 가로로 늘린 표 폭(배율 1 기준, 2026-11-09)
-      panels.forEach(function(p){p.el.style.maxHeight='none';p.el.style.bottom='auto';p.inner=p.el.querySelector('.fc-pin-in');p.inner.style.zoom=p.geo.scale;p.inner.style.width=p.geo.w?p.geo.w+'px':'';total+=p.el.offsetHeight;overhead+=p.el.offsetHeight-p.inner.getBoundingClientRect().height;});
-      var legend=$('fc-legend'),room=root.clientHeight-20-(legend?legend.offsetHeight:0)-Math.max(0,panels.length-1)*8;
-      var factor=Math.min(1,Math.max(0.1,(room-overhead-2)/Math.max(1,total-overhead))),top=10;
-      // 2026-11-09: 창 기본 배율 1.2 — 폭도 지도 왼쪽 여유(최대 160px)를 남기게, 줄 높이 반올림으로 넘치면 한 번 더 줄임
-      var wide=Math.max.apply(null,panels.map(function(p){return p.el.offsetWidth;}).concat([1])),wroom=root.clientWidth-Math.min(160,root.clientWidth*0.25)-14;
-      factor=Math.min(factor,Math.max(0.1,wroom/Math.max(1,wide-14)));      // ui.js applyBoxGeo 와 같은 폭 기준
-      for(var pass=0;pass<3;pass++){
-        var used=0;panels.forEach(function(p){p.inner.style.zoom=p.geo.scale*factor;used+=p.el.offsetHeight;});
-        if(used<=room-2)break;factor*=Math.max(0.5,(room-2-overhead)/Math.max(1,used-overhead));
-      }
-      panels.forEach(function(p){p.inner.style.zoom=p.geo.scale*factor;
-        if(p.geo.x==null){p.el.style.left='auto';p.el.style.right='10px';p.el.style.top=top+'px';}
-        else{p.el.style.left=Math.max(0,Math.min(p.geo.x,root.clientWidth-p.el.offsetWidth))+'px';p.el.style.right='auto';p.el.style.top=Math.max(0,Math.min(p.geo.y,root.clientHeight-p.el.offsetHeight-10))+'px';}
-        top+=p.el.offsetHeight+8;
-      });
+      box.hidden=!D.key||D.closed;
+      window.ForecastUI.layoutPanels();      // 세 창 배치는 ui.js 한 곳(2026-11-09: 한 창을 바꿔도 다른 창은 그대로)
     }
   }
   function render(){

@@ -75,7 +75,7 @@
     btn.textContent = fold ? '▶' : '◀'; btn.setAttribute('aria-expanded', String(!fold));
     try { localStorage.setItem(SIDE_KEY, fold ? 'fold' : 'open'); } catch (e) {}
     if (S.map) S.map.invalidateSize({ pan: false });
-    applyPinGeo(); if (window.ForecastDaily) window.ForecastDaily.layout();
+    applyPinGeo();
   }
   function buildShell() {
     $('view-forecast').innerHTML =
@@ -172,37 +172,68 @@
     return '<div class="fc-trend-box big"><div class="fc-scroll" tabindex="0" aria-label="시간별 예보 가로 스크롤">'+hourTable(sr,start,window.ForecastSeries.skipHours(start,fcNow()),(sr.s||[]).length)+'</div></div>';
   }
   // 고정 창 위치·크기(컴퓨터 화면만, 2026-11-03): scale = 글자·표 배율, x·y = 지도 안 왼쪽 위(null = 처음 자리 오른쪽 위). 지도보다 커지거나 밖으로 나가지 않게 맞춤
-  var PIN_KEY = 'ss_fc_pin', PIN_BODY = 440, PIN_PAD = 14, PIN_MIN = 0.8, PIN_DEFAULT = 1.2, PIN_W_MIN = 300;      // PIN_W_MIN = 가로로 줄일 때 표 폭 하한(배율 1 기준)      // PIN_BODY·PIN_PAD = 배율 1일 때 표 폭·창 안팎 여백(px). PIN_DEFAULT = 세 창 기본 배율(2026-11-09 20% 크게, 일별 창도 이 값)
+  var PIN_KEY = 'ss_fc_pin', PIN_PAD = 14, PIN_MIN = 0.8, PIN_DEFAULT = 1.2, PIN_W_MIN = 300;      // PIN_PAD = 창 안팎 여백(px). PIN_DEFAULT = 세 창 기본 배율(2026-11-09 20% 크게). PIN_W_MIN = 가로로 줄일 때 표 폭 하한(배율 1 기준)
   function isPhone() { return window.matchMedia('(max-width:760px)').matches; }
-  function loadPinGeo() { try { var j = JSON.parse(localStorage.getItem(PIN_KEY) || 'null'); if (j && j.scale > 0 && j.layout==='compact-v3') return j; } catch (e) {} return { scale: PIN_DEFAULT, x: null, y: null, layout:'compact-v3' }; }
+  // geo = {scale, x, y, w, user}: user 가 참이면 사람이 옮기거나 크기를 바꾼 창 → 그 배율·폭·자리를 그대로(다른 창 배치와 무관)
+  function loadPinGeo() { try { var j = JSON.parse(localStorage.getItem(PIN_KEY) || 'null'); if (j && j.scale > 0 && j.layout==='compact-v4') return j; } catch (e) {} return { scale: PIN_DEFAULT, x: null, y: null, layout:'compact-v4' }; }
   function savePinGeo() { try { localStorage.setItem(PIN_KEY, JSON.stringify(S.pinGeo)); } catch (e) {} }
-  function applyPinGeo() { applyBoxGeo($('fc-pin'), S.pinGeo); renderTail(); }
-  function applyBoxGeo(box, geo) {
-    var inner = box && box.querySelector('.fc-pin-in'); if (!inner || box.hidden) return;
-    if (isPhone()) { box.style.left = box.style.top = box.style.right = ''; inner.style.zoom = ''; return; }
-    var g = geo, mb = box.parentNode, mw = mb.clientWidth, mh = mb.clientHeight; if (!mw || !mh) return;
-    var sc = Math.max(PIN_MIN, g.scale); inner.style.zoom = sc;
-    var leftRoom=Math.min(160,mw*0.25);
-    if (g.w) { g.w = Math.max(PIN_W_MIN, Math.min(g.w, (mw - leftRoom - PIN_PAD) / sc)); inner.style.width = g.w + 'px'; } else inner.style.width = '';      // 가로로 늘린 표 폭(배율 1 기준 px)
-    var k = Math.min(1, (mw - leftRoom - PIN_PAD) / (box.offsetWidth - PIN_PAD), (mh - PIN_PAD) / (box.offsetHeight - PIN_PAD));
-    if (k < 1) { sc = Math.max(PIN_MIN, sc * k); inner.style.zoom = sc; }
-    if (g.x != null) { box.style.bottom='auto'; box.style.right = 'auto'; box.style.left = Math.max(0, Math.min(g.x, mw - box.offsetWidth)) + 'px'; box.style.top = Math.max(0, Math.min(g.y, mh - box.offsetHeight)) + 'px'; }
-    return sc;
+  function phoneBox(box) { var inner = box && box.querySelector('.fc-pin-in'); if (!inner) return; box.style.left = box.style.top = box.style.right = ''; inner.style.zoom = ''; inner.style.width = ''; }
+  function applyPinGeo() { if (isPhone()) { phoneBox($('fc-pin')); renderTail(); return; } layoutPanels(); }
+  // 세 창 배치(컴퓨터 화면, 2026-11-09 사용자: 한 창을 옮기거나 늘리거나 '원래대로'를 눌러도 다른 창은 그대로)
+  //  1) 보이는 창을 모두 기본 상태(배율 1.2·기본 폭)로 놓고 재서, 지도 높이·폭에 맞는 공통 계수와 오른쪽 위부터 쌓는 기본 자리를 정함
+  //     → 사람이 손댄 창도 이 계산에는 기본 상태로만 들어가므로, 손대지 않은 창의 크기·자리는 다른 창을 바꿔도 같음
+  //  2) 손대지 않은 창은 그 기본 배율·자리, 손댄 창(geo.user)은 그 창의 배율·폭·자리를 그대로
+  function geoKey(g) { return [g.scale, g.w || 0, g.x, g.y].join(','); }
+  function geoOf(id) { return id === 'fc-daily' ? (window.ForecastDaily ? window.ForecastDaily.geo() : null) : id === 'fc-tail' ? S.tailGeo : S.pinGeo; }
+  function placeUser(box, g) {
+    var mb = box.parentNode, mw = mb.clientWidth, mh = mb.clientHeight;
+    box.style.right = 'auto'; box.style.bottom = 'auto';
+    box.style.left = Math.max(0, Math.min(g.x, mw - box.offsetWidth)) + 'px'; box.style.top = Math.max(0, Math.min(g.y, mh - box.offsetHeight - 10)) + 'px';
   }
-  // 원래대로(2026-11-09 사용자): 그 창을 처음 크기·위치로(배율 기본·가로 폭·옮긴 자리 지움)
+  function layoutPanels() {
+    if (isPhone()) return;
+    var root = $('fmap') && $('fmap').parentNode; if (!root) return;
+    var mw = root.clientWidth, mh = root.clientHeight; if (!mw || !mh) return;
+    var ps = ['fc-pin', 'fc-tail', 'fc-daily'].map(function (id) { var el = $(id); return { el: el, geo: geoOf(id), inner: el && el.querySelector('.fc-pin-in') }; })
+      .filter(function (p) { return p.el && !p.el.hidden && p.inner && p.geo && p.el.parentNode === root; });
+    if (!ps.length) return;
+    ps.forEach(function (p) {
+      var st = p.el.style, is = p.inner.style;
+      p.keep = p.geo.user && p.inner._g === geoKey(p.geo) ? [is.zoom, is.width, st.left, st.top, st.right] : null;      // 손댄 창이 이미 그 값대로면 재고 나서 글자 하나 다르지 않게 되돌림(반올림 차이 방지)
+      st.maxHeight = 'none'; st.bottom = 'auto'; is.zoom = PIN_DEFAULT; is.width = '';
+    });
+    var total = 0, overhead = 0;
+    ps.forEach(function (p) { var h = p.el.offsetHeight; total += h; overhead += h - p.inner.getBoundingClientRect().height; });
+    var legend = $('fc-legend'), room = mh - 20 - (legend ? legend.offsetHeight : 0) - Math.max(0, ps.length - 1) * 8;
+    var f = Math.min(1, Math.max(0.1, (room - overhead - 2) / Math.max(1, total - overhead)));
+    var wide = Math.max.apply(null, ps.map(function (p) { return p.el.offsetWidth; })), wroom = mw - Math.min(160, mw * 0.25) - PIN_PAD;
+    f = Math.min(f, Math.max(0.1, wroom / Math.max(1, wide - PIN_PAD)));      // 지도 왼쪽 여유(최대 160px)를 남기게
+    for (var pass = 0; pass < 3; pass++) {                 // 줄 높이 반올림으로 넘치면 한 번 더 줄임
+      var used = 0; ps.forEach(function (p) { p.inner.style.zoom = PIN_DEFAULT * f; used += p.el.offsetHeight; });
+      if (used <= room - 2) break; f *= Math.max(0.5, (room - 2 - overhead) / Math.max(1, used - overhead));
+    }
+    var top = 10; ps.forEach(function (p) { p.top0 = top; top += p.el.offsetHeight + 8; });
+    ps.forEach(function (p) {
+      var g = p.geo;
+      if (!g.user) { p.inner.style.zoom = PIN_DEFAULT * f; p.el.style.left = 'auto'; p.el.style.right = '10px'; p.el.style.top = p.top0 + 'px'; return; }
+      if (p.keep) { p.inner.style.zoom = p.keep[0]; p.inner.style.width = p.keep[1]; p.el.style.left = p.keep[2]; p.el.style.top = p.keep[3]; p.el.style.right = p.keep[4]; return; }
+      p.inner.style.zoom = g.scale; p.inner.style.width = g.w ? g.w + 'px' : ''; placeUser(p.el, g); p.inner._g = geoKey(g);
+    });
+  }
+  function frontBox(box) { ['fc-pin','fc-tail','fc-daily'].forEach(function (id) { var el = $(id); if (el) el.style.zIndex = el === box ? '802' : '801'; }); }
+  // 원래대로(2026-11-09 사용자): 그 창만 처음 크기·자리로. 다른 창은 그대로
   function resetBox(box) {
-    var geo = box.id === 'fc-daily' ? window.ForecastDaily.geo() : box.id === 'fc-tail' ? S.tailGeo : S.pinGeo, inner = box.querySelector('.fc-pin-in');
-    geo.scale = PIN_DEFAULT; geo.x = null; geo.y = null; delete geo.w;
-    box.style.left = box.style.top = box.style.right = box.style.bottom = ''; if (inner) inner.style.width = '';
+    var geo = geoOf(box.id); if (!geo) return;
+    geo.scale = PIN_DEFAULT; geo.x = null; geo.y = null; geo.user = false; delete geo.w;
     if (box.id === 'fc-pin') savePinGeo();
-    applyPinGeo(); if (window.ForecastDaily) window.ForecastDaily.layout();
+    layoutPanels();
   }
   function movePinBox(box,geo,x,y,w,h) {
     // 위치 이동은 위/아래 동시 지정을 피하고 크기·글자 배율을 다시 계산하지 않는다.
     box.style.right='auto';box.style.bottom='auto';
     geo.x=Math.max(0,Math.min(x,box.parentNode.clientWidth-w));
     geo.y=Math.max(0,Math.min(y,box.parentNode.clientHeight-h-10));
-    box.style.left=geo.x+'px';box.style.top=geo.y+'px';
+    box.style.left=geo.x+'px';box.style.top=geo.y+'px';var bi=box.querySelector('.fc-pin-in');if(bi)bi._g=geoKey(geo);
   }
   function forecastRightPadding() {
     if(isPhone() || !S.pin) return 40;
@@ -217,29 +248,25 @@
   }
   function pinDrag(e) {
     if (isPhone()) return;
+    var hit = e.target.closest && e.target.closest('.fc-pin,.fc-tail,.fc-daily'); if (hit) frontBox(hit);      // 2026-11-09 사용자: 겹친 창은 창 안 어디를 눌러도 앞으로
     // 옮기기: 표 왼쪽 항목 칸(th.lb)이나 창 테두리 여백을 끌기(2026-11-09 왼쪽 제목 칸을 없앤 뒤)
     // 크기(2026-11-09 사용자): 창 왼쪽·오른쪽 옆면 = 글자 그대로 표 폭만(좌우 화살표), 아래 모서리 = 글자·표 배율(대각선 화살표)
     var t = e.target, grip = t.closest && (t.closest('.fc-pin-grip') || t.closest('.fc-pin-edge')), cl = t.classList || { contains: function () { return false; } };
     var handle = t.closest && (t.closest('.fc-pin th.lb,.fc-tail th.lb,.fc-daily th.lb') || cl.contains('fc-pin') || cl.contains('fc-tail') || cl.contains('fc-daily') || cl.contains('fc-pin-in'));
     if (!grip && (!handle || t.closest('button'))) return;
-    var box = t.closest('.fc-pin,.fc-tail,.fc-daily'), geo = box.id === 'fc-daily' ? window.ForecastDaily.geo() : box.id === 'fc-tail' ? S.tailGeo : S.pinGeo, r = box.getBoundingClientRect(), mr = box.parentNode.getBoundingClientRect(), sx = e.clientX, sy = e.clientY, x0 = r.left - mr.left, y0 = r.top - mr.top, w0 = r.width, left = !!grip && (grip.dataset.grip || grip.dataset.edge) === 'l', mode = grip ? (grip.dataset.edge ? 'w' : 'z') : null;
-    ['fc-pin','fc-tail','fc-daily'].forEach(function(id){var el=$(id);if(el)el.style.zIndex=el===box?'802':'801';});
-    geo.x = x0; geo.y = y0; e.preventDefault();
-    var inner0 = box.querySelector('.fc-pin-in'), z0 = parseFloat(inner0 && inner0.style.zoom) || geo.scale || 1, iw0 = inner0 ? inner0.offsetWidth : PIN_BODY;
+    var box = t.closest('.fc-pin,.fc-tail,.fc-daily'), geo = geoOf(box.id), r = box.getBoundingClientRect(), mr = box.parentNode.getBoundingClientRect(), sx = e.clientX, sy = e.clientY, x0 = r.left - mr.left, y0 = r.top - mr.top, w0 = r.width, left = !!grip && (grip.dataset.grip || grip.dataset.edge) === 'l', mode = grip ? (grip.dataset.edge ? 'w' : 'z') : null;
+    e.preventDefault();
+    // 손대는 순간 지금 보이는 배율·자리를 그 창의 값으로(이후 다른 창 배치와 무관, 시작할 때 크기가 바뀌지 않게)
+    var inner0 = box.querySelector('.fc-pin-in'), z0 = parseFloat(inner0 && inner0.style.zoom) || geo.scale || 1, iw0 = (w0 - PIN_PAD) / z0, mw = box.parentNode.clientWidth;
+    geo.user = true; geo.scale = z0; geo.x = x0; geo.y = y0;
     function mv(ev) {
       var dx = ev.clientX - sx, dy = ev.clientY - sy;
       if (!grip) { movePinBox(box,geo,x0+dx,y0+dy,w0,r.height); return; }
-      if (mode === 'w') {
-        geo.w = Math.max(PIN_W_MIN, iw0 + (left ? -dx : dx) / z0);
-        if (left) geo.x = 0;
-        applyBoxGeo(box, geo); if (box.id === 'fc-daily' && window.ForecastDaily) window.ForecastDaily.layout();
-        if (left) { geo.x = x0 + w0 - box.offsetWidth; applyBoxGeo(box, geo); }
-        return;
-      }
-      geo.scale = Math.max(PIN_MIN, ((left ? w0 - dx : w0 + dx) - PIN_PAD) / (geo.w || PIN_BODY));
-      if (left) geo.x = 0;                                 // 왼쪽 모서리: 오른쪽 끝을 그대로 두고 왼쪽으로 커짐
-      geo.scale = applyBoxGeo(box, geo) || geo.scale;
-      if (left) { geo.x = x0 + w0 - box.offsetWidth; applyBoxGeo(box, geo); }
+      var bw = Math.min(mw, Math.max(0, left ? w0 - dx : w0 + dx));      // 바라는 창 폭(지도보다 넓지 않게)
+      if (mode === 'w') { geo.w = Math.max(PIN_W_MIN, (bw - PIN_PAD) / z0); inner0.style.width = geo.w + 'px'; }      // 옆면: 배율 그대로 표 폭만
+      else { geo.scale = Math.max(PIN_MIN, (bw - PIN_PAD) / iw0); inner0.style.zoom = geo.scale; }      // 모서리: 폭 그대로 배율만
+      geo.x = left ? x0 + w0 - box.offsetWidth : x0;      // 왼쪽 손잡이: 오른쪽 끝 그대로
+      placeUser(box, geo); geo.x = box.offsetLeft; geo.y = box.offsetTop; inner0._g = geoKey(geo);
     }
     function up() { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up); document.body.classList.remove('fc-pin-moving'); if (box.id === 'fc-pin') savePinGeo(); }
     document.body.classList.add('fc-pin-moving');
@@ -252,7 +279,7 @@
   }
   // 89(2026-11-09 사용자 "기상청처럼"): 신적설·강수는 강도만, 기온·습도는 그 시각 값, 강수확률은 기상청 규칙(series.js combine). 3시간 창과 지도 말풍선이 같이 씀
   function threeRows(bins) {
-    var rows=[['신적설','snow'],['강수','pcp'],['강수확률 %','pop'],['기온 ℃','tmp']];
+    var rows=[['신적설','snow'],['강수강도','pcp'],['강수확률 %','pop'],['기온 ℃','tmp']];      // 2026-11-09 사용자: '강수' → '강수강도'
     if(bins.some(function(b){return b.reh!=null;}))rows.push(['습도 %','reh']);
     var dl=bins.map(function(b,i){return i>0&&kstDateLabel(new Date(Date.parse(b.slot_at)-3600e3).toISOString())!==kstDateLabel(new Date(Date.parse(bins[i-1].slot_at)-3600e3).toISOString());});
     return rows.map(function(row){
@@ -284,15 +311,10 @@
     if(isPhone()) {
       box.style.top='';box.style.bottom=(lh+20)+'px';
       box.style.maxHeight=Math.max(80,box.parentNode.clientHeight-(near&&!near.hidden?near.offsetHeight:0)-lh-40)+'px';
-    } else {
-      box.style.bottom='auto';
-      var top=S.tailGeo.y!=null?S.tailGeo.y:near&&!near.hidden?near.offsetTop+near.offsetHeight+12:10;
-      box.style.top=top+'px';
-      box.style.maxHeight=Math.max(80,box.parentNode.clientHeight-top-10)+'px';
+      phoneBox(box);
     }
-    applyBoxGeo(box,S.tailGeo);
     syncForecastMapSize();
-    if(window.ForecastDaily)window.ForecastDaily.layout();
+    if(window.ForecastDaily)window.ForecastDaily.layout(); else layoutPanels();      // 컴퓨터 화면 배치는 layoutPanels 한 곳
   }
   function tailVisible() {
     var view=$('view-forecast');
@@ -599,5 +621,5 @@
   }
   // 다른 화면(장비 지원)에서 그 지사로 바로 오기
   function openBranch(id) { S.pendingFocus = id; }
-  window.ForecastUI = { init: init, show: show, openBranch: openBranch, closeSelection: unpin, version: fcVersion, pinDefault: PIN_DEFAULT, _state: function () { return S; } };
+  window.ForecastUI = { init: init, show: show, openBranch: openBranch, closeSelection: unpin, version: fcVersion, pinDefault: PIN_DEFAULT, layoutPanels: layoutPanels, _state: function () { return S; } };
 })();

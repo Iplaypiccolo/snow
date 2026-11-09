@@ -918,8 +918,42 @@ def t_side_fold_legend_daylines(b):
         check(n > 0 and bw and float(bw[:-2]) >= 1.5, f'{root}: 날짜가 바뀌는 칸 진한 선(창 배율로 1.67px 등) {n} {bw}')
     first_day = J(p, "(() => { const t=document.querySelector('#fc-pin table'); const ths=[...t.querySelectorAll('thead tr:last-child th:not(.lb)')]; const i=ths.findIndex(th=>th.classList.contains('dl')); return [i, ths.length] })()")
     check(first_day[0] > 0, f'1시간 표: 첫 칸이 아닌 자정 칸에 선 {first_day}')
+    # 2026-11-09 사용자: 세 창 글자 크기·모양 통일(일별 표 기준), 항목 이름 한 줄, 3시간 '강수강도'
+    fonts = J(p, """['fc-pin','fc-tail','fc-daily'].map(id => { const b=document.getElementById(id); return ['thead tr:last-child th:not(.lb)','tbody th.lb'].map(q => { const c=getComputedStyle(b.querySelector(q)); return c.fontFamily+'|'+c.fontSize+'|'+c.fontWeight; }).join('/') })""")
+    check(len(set(fonts)) == 1, f'세 창 머리글·항목 글꼴·크기 같음 {fonts}')
+    tall = J(p, """[...document.querySelectorAll('#fc-pin th.lb,#fc-tail th.lb,#fc-daily th.lb')].filter(e => { const r=document.createRange(); r.selectNodeContents(e); return r.getBoundingClientRect().height > parseFloat(getComputedStyle(e).fontSize) * 1.9 }).map(e => e.textContent)""")
+    check(not tall, f'항목 이름이 두 줄이 아님(최저·최고℃ 포함) {tall}')
+    check(p.locator('#fc-tail tbody tr').nth(1).locator('th').inner_text() == '강수강도', "3시간 표 '강수강도'")
+    qf = J(p, "(() => { const q=document.querySelector('#fc-tail td.fc-qual'), v=document.querySelector('#fc-tail tbody tr:nth-child(3) td'); return [parseFloat(getComputedStyle(q).fontSize), parseFloat(getComputedStyle(v).fontSize)] })()")
+    check(qf[0] < qf[1], f'강도 글자는 숫자보다 조금 작게 {qf}')
 
 TESTS += [t_side_fold_legend_daylines]
+
+def t_modal_isolation(b):
+    """2026-11-09 사용자: 옆으로 늘려도 글자·표·높이 그대로, 한 창을 늘리거나 '원래대로'를 눌러도 다른 창은 그대로, 겹친 창은 어디를 눌러도 앞으로(세 창이 줄어든 작은 화면에서)"""
+    p, m = open_page(b); p.set_viewport_size({'width': 1280, 'height': 680}); d = m.fc_cells[0][2][0]
+    J(p, f"SSOpenForecast('{d}')"); p.locator('.fc-detail tbody tr').first.click(); p.wait_for_selector('#fc-daily table'); p.wait_for_timeout(300)
+    st = lambda: J(p, "['fc-pin','fc-tail','fc-daily'].map(id => { const b=document.getElementById(id), r=b.getBoundingClientRect(); return [Math.round(r.left),Math.round(r.top),Math.round(r.width),Math.round(r.height), b.querySelector('.fc-pin-in').style.zoom] })")
+    s0 = st(); check(float(s0[0][4]) < 1.2, f'세 창이 지도에 맞게 줄어든 상태에서 시험 {s0}')
+    def edge(box, side, dx):
+        e = p.locator(box + ' .fc-pin-edge.' + side).bounding_box(); x, y = e['x'] + 5, e['y'] + e['height'] / 2
+        p.mouse.move(x, y); p.mouse.down(); p.mouse.move(x - 1, y, steps=1); p.wait_for_timeout(50); mid = st(); p.mouse.move(x + dx, y + 10, steps=6); p.mouse.up(); p.wait_for_timeout(150); return mid
+    mid = edge('#fc-daily', 'l', -120); s1 = st()
+    check(mid[2][4] == s0[2][4] and abs(mid[2][2] - s0[2][2]) <= 2 and mid[2][3] == s0[2][3], f'잡는 순간 크기 그대로 {s0[2]} {mid[2]}')
+    check(s1[0] == s0[0] and s1[1] == s0[1], f'일별을 늘려도 다른 두 창 그대로 {s0} {s1}')
+    check(s1[2][4] == s0[2][4] and s1[2][3] == s0[2][3] and s1[2][2] >= s0[2][2] + 110, f'일별: 글자·높이 그대로 폭만 {s0[2]} {s1[2]}')
+    edge('#fc-pin', 'l', -150); s2 = st(); check(s2[1] == s1[1] and s2[2] == s1[2], '1시간을 늘려도 다른 창 그대로')
+    p.locator('#fc-tail .fc-reset').click(); p.wait_for_timeout(150); s3 = st(); check(s3[0] == s2[0] and s3[2] == s2[2], f"3시간 '원래대로'에 다른 창 그대로 {s2} {s3}")
+    p.locator('#fc-pin .fc-reset').click(); p.wait_for_timeout(150); s4 = st(); check(s4[0] == s0[0] and s4[2] == s3[2], "1시간 '원래대로' = 처음 그대로, 일별은 그대로")
+    th = p.locator('#fc-tail th.lb').first.bounding_box(); p.mouse.move(th['x'] + 20, th['y'] + 8); p.mouse.down(); p.mouse.move(th['x'] + 20, th['y'] - 120, steps=5); p.mouse.up(); p.wait_for_timeout(100)      # 3시간 창을 1시간 창 아래쪽에 겹치게
+    zi = lambda: J(p, "['fc-pin','fc-tail','fc-daily'].map(id=>+document.getElementById(id).style.zIndex)")
+    check(zi()[1] > zi()[0], '옮긴 3시간 창이 앞')
+    pb = p.locator('#fc-pin').bounding_box(); cx, cy = pb['x'] + pb['width'] / 2, pb['y'] + 12
+    check(J(p, f"!!document.elementFromPoint({cx},{cy}).closest('#fc-pin')"), '눌러 볼 자리는 1시간 창이 보이는 곳')
+    p.mouse.click(cx, cy); p.wait_for_timeout(100)
+    check(zi()[0] > zi()[1] and zi()[0] > zi()[2], f'겹친 1시간 창의 표 칸을 눌러도 앞으로 {zi()}')
+
+TESTS += [t_modal_isolation]
 
 if __name__ == "__main__":
     only = sys.argv[1:]

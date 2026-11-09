@@ -44,6 +44,16 @@
 
 ## 기록 (최신이 맨 위)
 
+### 2026-11-09 · 커밋 (이 기록 커밋 하나) · 세 창 배치 한 곳(layoutPanels): 한 창을 바꿔도 다른 창 그대로, 누르면 앞으로
+- `forecast/ui.js`: `layoutPanels`(기본 상태로 재서 공통 계수·기본 자리, 손댄 창은 그 값 그대로), `frontBox`, `resetBox` 는 그 창만, 끌기는 그 창만 바꿈. `applyBoxGeo` 삭제. `forecast/daily.js`: 배치를 `ForecastUI.layoutPanels` 로.
+- 시험 `tests/test_forecast_ui.py` `t_modal_isolation`(1280×680, 줄어든 상태에서 잡는 순간·일별 늘리기·원래대로·겹친 창 누르기).
+— ✍ Claude Code 작성
+
+### 2026-11-09 · 커밋 (이 기록 커밋 하나) · 세 창 글자 통일(일별 기준)·강수강도
+- `forecast/style.css`: 1시간·3시간 표 글꼴을 일별과 같게(본문 글꼴 11px), 항목 한 줄·자간, 강도 글자 10px. `forecast/daily.js`: 최저·최고℃ 한 줄. `forecast/ui.js`: '강수강도'.
+- 시험 `tests/test_forecast_ui.py`: 세 창 글꼴 같음·항목 한 줄·강수강도·강도 글자 크기.
+— ✍ Claude Code 작성
+
 ### 2026-11-09 · 커밋 (이 기록 커밋 하나) · 창 크기 손잡이 나눔(옆면 = 가로, 모서리 = 배율)·원래대로 단추
 - `forecast/ui.js`·`forecast/daily.js`: 창마다 옆면 손잡이(`.fc-pin-edge`, 가로 폭만)와 모서리(`.fc-pin-grip`, 배율만), × 왼쪽 '원래대로'(`.fc-reset` → `resetBox`). `forecast/style.css`: 손잡이·단추 모양.
 - 시험 `tests/test_forecast_ui.py`: 옆면 끌기(조금 비스듬해도 가로만)·화살표 모양·원래대로.
