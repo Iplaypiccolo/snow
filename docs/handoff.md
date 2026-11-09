@@ -44,6 +44,11 @@
 
 ## 기록 (최신이 맨 위)
 
+### 2026-11-09 · 커밋 (이 기록 커밋 하나) · 일별 창 오늘 칸을 기상청처럼(SQL88, 초단기 SKY 수집)
+- 사용자 "나로 진행해줘" 후 `supabase/migrations/20261109_88_forecast_daily_today_vsrt.sql` 적용: 초단기 SKY 수집(30개/발표), `forecast_daily_cell` 오늘 칸은 지난 시각 제외·가까운 6시간 초단기 값, `forecast_version` d 에 초단기 완료 시각. 되돌린 시험 OK.
+- `collect-forecast` v8 배포(시험 목록 VSRT_VARS 에 PTY·SKY, 머리 설명). 저장 없는 시험 호출로 초단기 SKY 확인.
+— ✍ Claude Code 작성
+
 ### 2026-11-09 · 커밋 (이 기록 커밋 하나) · 코드 검토 뒤 정리(SQL87): 습도 개수 값 삭제, 기본 크기 한 곳, 낡은 설명 삭제
 - 사용자 "안쓰는건 지워" 후 `supabase/migrations/20261109_87_forecast_humidity_drop_count.sql` 적용: 3시간 칸 `reh_n` 뺌(확인: 대관령 26칸 모두 reh 있음, reh_n 0).
 - `forecast/series.js`·`tests/_sb_mock.py` reh_n 삭제. `forecast/daily.js` 기본 배율은 `ForecastUI.pinDefault` 사용. `forecast/style.css` 안 쓰는 `.fc-vs-key` 삭제, 겹친 설명 정리.

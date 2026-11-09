@@ -9,7 +9,7 @@
 //  * 기상청 키는 함수 비밀값 KMA_AUTH_KEY 에만. 키가 들어간 주소는 오류·기록에 남기지 않는다.
 //  * 받을 종류·순서는 서버(forecast_plan)가 정함: 적설·강수·기온 먼저, 강수확률은 그다음(마이그레이션 42). 이 함수는 목록대로 받기만 함
 //  * 시험 호출 {"probe":"POP"}: 그 종류를 한 시각만 받아 요약(개수·최소·최대)만 돌려줌. 저장하지 않음 — 새 종류를 넣기 전에 기상청이 주는지 확인하는 용도
-//  * 초단기예보(마이그레이션 57): 본문 {"vsrt":true} → 10분 간격 발표분의 T1H·RN1·POP 6시각(18번)을 받아 forecast_vsrt_put. 단기예보 값은 건드리지 않음(화면에서 전환해 봄).
+//  * 초단기예보(마이그레이션 57): 본문 {"vsrt":true} → 10분 간격 발표분을 서버가 알려 준 종류(지금 T1H·RN1·POP·PTY·SKY, 88)·6시각만큼 받아 forecast_vsrt_put. 단기예보 값은 건드리지 않음(화면에서 전환해 봄).
 //    아직 안 나온 발표분은 200 + '# dfs_file_read error' → 한 칸 앞 발표분을 받음(실패로 기록 안 함). 시험 호출 {"vsrt":true,"probe":"T1H"}: 저장 없이 요약만
 //    기온이 유효 칸 모두 0 인 시각이 오면(정각 발표분에서 2026-11-09 두 번 관찰) 서버가 {incomplete:true} → 그 발표분은 버리고 한 칸 앞(마이그레이션 81)
 //  * 빈 시각 판단: 결측(-90 이하, 바다 칸 -99 포함)을 뺀 유효 칸이 모두 0. 실제 격자는 바다 칸이 -99 라 '모든 칸이 유효' 조건은 맞지 않음(81)
@@ -18,7 +18,7 @@
 // ============================================================
 export const GRID_URL = 'https://apihub.kma.go.kr/api/typ01/cgi-bin/url/nph-dfs_shrt_grd';
 export const VSRT_URL = 'https://apihub.kma.go.kr/api/typ01/cgi-bin/url/nph-dfs_vsrt_grd';
-export const VSRT_VARS = ['T1H', 'RN1', 'POP'];
+export const VSRT_VARS = ['T1H', 'RN1', 'POP', 'PTY', 'SKY'];      // 시험 호출로 받아 볼 수 있는 초단기 종류. 실제로 받을 종류는 서버(forecast_vsrt_begin)가 정함
 export const NX = 149, NY = 253;
 const BUDGET_MS = 120000, GAP_MS = 500, RETRY_MS = 2000, TRIES = 4;   // 무료 플랜 함수 한 번 최대 150초
 
