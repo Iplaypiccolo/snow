@@ -1,7 +1,8 @@
-/* 일별 원값 표시와 세 예보창의 휴대폰 탭. 시간별 계산/수집 코드는 건드리지 않는다. */
+/* 일별 원값 표시와 세 예보창의 휴대폰 탭. 시간별 계산/수집 코드는 건드리지 않는다.
+   2026-11-09(마이그레이션 83): 일별 자료는 격자별로 기억하고, 열려 있는 동안 10분마다 forecast_version 의 d 만 확인해 바뀐 때만 다시 받음 */
 (function(){
   'use strict';
-  var D={key:null,seq:0,data:null,error:false,closed:false,tab:'hourly',timer:null,busy:0,geo:{scale:1,x:null,y:null}};
+  var D={key:null,seq:0,data:null,error:false,closed:false,tab:'hourly',timer:null,busy:0,geo:{scale:1,x:null,y:null},ver:null,cache:{}};
   var ids=['fc-pin','fc-tail','fc-daily'],tabs=['hourly','three','daily'];
   function $(id){return document.getElementById(id);}
   function phone(){return window.matchMedia('(max-width:760px)').matches;}
@@ -39,12 +40,24 @@
     return html+'</tbody></table></div>';
   }
   function visible(){var v=$('view-forecast');return !!(D.key&&!D.closed&&v&&v.offsetParent&&!document.hidden&&(!phone()||D.tab==='daily'));}
-  function schedule(){clearTimeout(D.timer);D.timer=null;if(visible())D.timer=setTimeout(fetchDaily,D.error?180000:600000);}
-  function fetchDaily(){
+  function schedule(){clearTimeout(D.timer);D.timer=null;if(visible())D.timer=setTimeout(function(){if(D.error||!D.data)fetchDaily();else check();},D.error?180000:600000);}
+  function version(fresh){return window.ForecastUI&&window.ForecastUI.version?window.ForecastUI.version(fresh):Promise.reject(Error('no version'));}
+  // 83: 바뀌었을 때만 다시 받음. 확인이 안 되면 예전처럼 다시 받음
+  function check(){
     if(!visible()||D.busy===D.seq)return;
-    var seq=D.seq,xy=D.key.split(',');D.busy=seq;
-    SSAuth.authed('/rest/v1/rpc/forecast_daily_cell',{method:'POST',body:{p_nx:+xy[0],p_ny:+xy[1]}}).then(function(r){
-      if(seq!==D.seq)return;if(!r.ok||!r.json||!Array.isArray(r.json.days))throw Error('daily unavailable');
+    var seq=D.seq;D.busy=seq;
+    version(true).then(function(v){if(D.busy===seq)D.busy=0;if(seq!==D.seq)return;if(!D.ver||v.d!==D.ver)fetchDaily(v);else schedule();},
+      function(){if(D.busy===seq)D.busy=0;if(seq===D.seq)fetchDaily(null);});
+  }
+  function fetchDaily(known){
+    if(!visible()||D.busy===D.seq)return;
+    var seq=D.seq,key=D.key,xy=key.split(','),ver=known||null;D.busy=seq;
+    (known!==undefined?Promise.resolve(known):version(false).catch(function(){return null;})).then(function(v){
+      ver=v;if(seq!==D.seq)return {stale:true};
+      return SSAuth.authed('/rest/v1/rpc/forecast_daily_cell',{method:'POST',body:{p_nx:+xy[0],p_ny:+xy[1]}});
+    }).then(function(r){
+      if(seq!==D.seq||r.stale)return;if(!r.ok||!r.json||!Array.isArray(r.json.days))throw Error('daily unavailable');
+      D.ver=ver?ver.d:null;if(ver){D.cache[key]={d:ver.d,data:r.json};var ks=Object.keys(D.cache);if(ks.length>40)delete D.cache[ks[0]];}
       D.data=r.json;D.error=false;render();
     }).catch(function(){if(seq===D.seq){D.error=true;render();}}).then(function(){if(D.busy===seq)D.busy=0;if(seq===D.seq)schedule();});
   }
@@ -99,7 +112,7 @@
   }
   function sync(key,name,selection){
     ensure();if(!$('fc-daily'))return;
-    if(D.key!==key||D.selection!==selection){D.key=key;D.selection=selection;D.seq++;D.data=null;D.error=false;D.closed=false;D.tab='hourly';D.name=name;clearTimeout(D.timer);render();if(key)fetchDaily();}
+    if(D.key!==key||D.selection!==selection){var hit=key&&D.cache[key];D.key=key;D.selection=selection;D.seq++;D.data=hit?hit.data:null;D.ver=hit?hit.d:null;D.error=false;D.closed=false;D.tab='hourly';D.name=name;clearTimeout(D.timer);render();if(key){if(hit)check();else fetchDaily();}}
     layout();
   }
   window.addEventListener('resize',function(){layout();if(visible()&&!D.data)fetchDaily();schedule();});

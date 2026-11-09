@@ -11,11 +11,13 @@
      서버가 섞어 저장하므로 지사별 요청·편성·확정 값과 같음. 고정 창 표에서 초단기 시각은 색칠(series.vn). 전환 버튼·'발표 기준' 문구는 없앰
    - 격자를 누르면 뜨는 창(컴퓨터 화면만): 제목 줄을 끌어 옮기고, 아래쪽 모서리를 끌어 크기를 바꿈(글자도 같은 비율). 다른 격자를 눌러도 그대로이고 이 브라우저에 기억
    - 서버 읽기: branch_forecast(지사 59줄) 한 번 + 본부를 열 때 forecast_grid(그 본부 지사들의 격자, 수 KB) + 지사를 열 때 그 지사 추이(약 10KB)
+   - 격자 창(2026-11-09, 마이그레이션 83): 격자 자료(forecast_cell_detail, 약 11KB)는 처음 한 번 받아 격자별로 기억하고, 열려 있는 동안
+     10분(받는 중이면 3분)마다 forecast_version(약 0.1KB)으로 바뀌었는지만 확인 → 바뀐 때만 다시 받음. 확인이 실패하면 예전처럼 다시 받음
    ============================================================ */
 (function () {
   'use strict';
   var G = window.GridCore, JC = window.JurisCore;
-  var S = { inited: false, map: null, lines: null, cells: null, hq: 'ALL', focus: null, state: null, bf: {}, grid: {}, series: {}, pin: null, pinAt: 0, names: null, meta: null, loading: false, pendingFocus: null, pinGeo: null };
+  var S = { tailCache: {}, inited: false, map: null, lines: null, cells: null, hq: 'ALL', focus: null, state: null, bf: {}, grid: {}, series: {}, pin: null, pinAt: 0, names: null, meta: null, loading: false, pendingFocus: null, pinGeo: null };
 
   function $(id) { return document.getElementById(id); }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
@@ -253,23 +255,55 @@
     return !!(view && view.offsetParent && !document.hidden && S.pin && !(S.nearClosed && S.tailClosed));
   }
   function clearTailTimer() { clearTimeout(S.tailTimer); S.tailTimer=null; }
+  // 83: 예보가 바뀌었는지만 확인(약 0.1KB). 30초 안에 다시 물으면 앞 답을 씀(격자 창·일별 창이 같이 씀)
+  var VER={v:null,at:0,p:null};
+  function fcVersion(fresh) {
+    if(!fresh && VER.v && Date.now()-VER.at<30000) return Promise.resolve(VER.v);
+    if(VER.p) return VER.p;
+    VER.p=SSAuth.authed('/rest/v1/rpc/forecast_version',{method:'POST',body:{}}).then(function(r){
+      VER.p=null;
+      if(!r.ok || !r.json || typeof r.json.c!=='string' || typeof r.json.d!=='string') throw new Error('version unavailable');
+      VER.v=r.json; VER.at=Date.now(); return VER.v;
+    },function(e){ VER.p=null; throw e; });
+    return VER.p;
+  }
   function scheduleTail() {
     clearTailTimer();
     if(!tailVisible() || !S.tailKey) return;
     var key=S.tailKey, delay=S.tailRetry || !S.tailData || S.tailData.collecting ? 180000 : 600000;
     S.tailTimer=setTimeout(function(){
       S.tailTimer=null;
-      if(S.tailKey===key && tailVisible()) fetchTail(key,true);
+      if(S.tailKey===key && tailVisible()) { if(S.tailRetry || !S.tailData) fetchTail(key,true); else checkTail(key); }
     },delay);
   }
-  function fetchTail(key,refresh) {
+  // 83: 바뀌었을 때만 다시 받음. 확인이 안 되면 예전처럼 다시 받음
+  function checkTail(key) {
     if(S.tailBusy===key) return;
     S.tailBusy=key;
-    var xy=S.pin.split(',');
-    SSAuth.authed('/rest/v1/rpc/forecast_cell_detail',{method:'POST',body:{p_nx:+xy[0],p_ny:+xy[1]}}).then(function(r){
-      if(S.tailKey!==key || !S.pin) return;
+    fcVersion(true).then(function(v){
+      if(S.tailBusy===key) S.tailBusy=null;
+      if(S.tailKey!==key) return;
+      S.tailFetchedAt=Date.now();
+      if(!S.tailVer || v.c!==S.tailVer) fetchTail(key,true,v); else scheduleTail();
+    },function(){
+      if(S.tailBusy===key) S.tailBusy=null;
+      if(S.tailKey===key) fetchTail(key,true,null);
+    });
+  }
+  function fetchTail(key,refresh,known) {
+    if(S.tailBusy===key) return;
+    S.tailBusy=key;
+    var pin=S.pin, xy=pin.split(','), ver=known||null;
+    (known!==undefined ? Promise.resolve(known) : fcVersion(false).catch(function(){ return null; })).then(function(v){
+      ver=v;
+      if(S.tailKey!==key || !S.pin) return { ok: false, stale: true };
+      return SSAuth.authed('/rest/v1/rpc/forecast_cell_detail',{method:'POST',body:{p_nx:+xy[0],p_ny:+xy[1]}});
+    }).then(function(r){
+      if(S.tailKey!==key || !S.pin || r.stale) return;
       if(!r.ok || !r.json) throw new Error('forecast unavailable');
       S.tailFetchedAt=Date.now(); S.tailRetry=false; S.tailError=false;
+      S.tailVer=ver ? ver.c : null;
+      if(ver && r.json.status==='ok') { S.tailCache[pin]={c:ver.c,data:r.json}; var ks=Object.keys(S.tailCache); if(ks.length>40) delete S.tailCache[ks[0]]; }
       if(refresh && JSON.stringify(S.tailData)===JSON.stringify(r.json)) return;
       var scrolls=['fc-pin','fc-tail'].map(function(id){var el=$(id).querySelector('.fc-scroll');return el?el.scrollLeft:0;});
       S.tailData=r.json; renderPin();
@@ -285,9 +319,10 @@
     var key=S.focus+':'+S.pin+':'+S.pinAt;
     if(S.tailKey===key) return;
     clearTailTimer();
-    S.tailKey=key; S.tailData=null; S.tailError=false; S.tailRetry=false; S.tailClosed=false; S.nearClosed=false;
+    var hit=S.tailCache[S.pin];                                   // 83: 이미 받은 격자는 기억한 값을 바로 보이고 바뀌었는지만 확인
+    S.tailKey=key; S.tailData=hit?hit.data:null; S.tailVer=hit?hit.c:null; S.tailError=false; S.tailRetry=false; S.tailClosed=false; S.nearClosed=false;
     S.tailGeo=S.tailGeo || {scale:1,x:null,y:null}; renderTail();
-    fetchTail(key,false);
+    if(hit) checkTail(key); else fetchTail(key,false);
   }
   // 격자를 누르면 그 격자의 그림을 지도 오른쪽 위에 고정(지도 아무 데나 누르면 닫힘)
   function renderPin() {
@@ -482,7 +517,7 @@
     document.addEventListener('visibilitychange',function(){
       clearTailTimer();
       if(tailVisible() && S.tailKey){
-        if(Date.now()-(S.tailFetchedAt||0)>=60000) fetchTail(S.tailKey,true); else scheduleTail();
+        if(Date.now()-(S.tailFetchedAt||0)>=60000) { if(S.tailRetry || !S.tailData) fetchTail(S.tailKey,true); else checkTail(S.tailKey); } else scheduleTail();
       }
     });
     $('view-forecast').addEventListener('pointerdown', pinDrag);
@@ -519,5 +554,5 @@
   }
   // 다른 화면(장비 지원)에서 그 지사로 바로 오기
   function openBranch(id) { S.pendingFocus = id; }
-  window.ForecastUI = { init: init, show: show, openBranch: openBranch, closeSelection: unpin, _state: function () { return S; } };
+  window.ForecastUI = { init: init, show: show, openBranch: openBranch, closeSelection: unpin, version: fcVersion, _state: function () { return S; } };
 })();

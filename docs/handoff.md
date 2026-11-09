@@ -44,6 +44,14 @@
 
 ## 기록 (최신이 맨 위)
 
+### 2026-11-09 · 커밋 (이 기록 커밋 하나) · 예보 3단계: 격자·일별 창은 받은 자료 다시 쓰기, 작은 확인으로만 갱신 (SQL83 승인 적용)
+- 사용자 "진행해" 승인 후 `supabase/migrations/20261109_83_forecast_version.sql` 적용: `forecast_version()`(로그인만, 읽기만, 응답 약 75바이트·17ms). `c` = 지금 시·`forecast_cells` 최근 갱신·최신 단기 발표·받는 중 시각 수, `d` = 지금 시·일별 날씨/중기/일별 기온 최근 갱신.
+- `forecast/ui.js`: `fcVersion`(30초 안 재사용), `checkTail`, 격자별 기억(`S.tailCache`, 40개). 같은 격자를 다시 고르면 기억한 값을 바로 보이고 확인만. 10분(받는 중·실패 3분)마다 작은 확인 → 바뀐 때만 `forecast_cell_detail`. 확인이 실패하면 예전처럼 다시 받음.
+- `forecast/daily.js`: 같은 방식(`D.cache`, `check`), `ForecastUI.version` 공유.
+- 시험: `tests/_sb_mock.py` 에 `forecast_version`. `tests/test_forecast_ui.py` 갱신 시험은 버전을 바꿔야 다시 받도록 고침, 새 시험 `t_tail_cache_and_version_fallback`, `t_daily_version`.
+- 같은 날 확인: 11:31 예약 수집 결과 대관령 89,130 60칸 기상청과 일치. 11:18 예약에서 11:00 정각 초단기 발표분을 요청 1번 만에 버림(미완성 판단 동작으로 보임, 응답 내용은 기록되지 않아 확정은 4단계).
+— ✍ Claude Code 작성
+
 ### 2026-11-09 · 커밋 (이 기록 커밋 하나) · 예보 2단계: 옛 발표분 시간별 값 정리·격자 창 계산 한 번 (SQL82 승인 적용)
 - 사용자 "적용해" 승인 후 `supabase/migrations/20261109_82_forecast_trim_and_single_pass.sql` 적용.
 - `fc_progress`: 새 발표분이 done 이 되면 `forecast_hours` 에서 그보다 옛 발표분 값을 지움. 받는 중에는 직전 완성 발표분이 남음. **`forecast_runs` 목록은 지우지 않음** — `forecast_daily_aux_hours`(일별 최저·최고기온, 48시간)가 FK cascade 로 묶여 있어 지우면 오늘 최저기온(새벽 발표분에만 있음)이 사라짐.

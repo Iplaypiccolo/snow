@@ -575,15 +575,25 @@ def tail_refresh_page(b):
     data=J(p,f'{S}.tailData')
     complete=copy.deepcopy(data['tail']['bins'])
     data['collecting']=True;data['tail']['bins']=complete[:2]
-    state={'data':data,'calls':0,'fail':False}
+    state={'data':data,'calls':0,'fail':False,'ver':'c1','vcalls':0,'vfail':False}
     def reply(route):
         state['calls']+=1
         route.fulfill(status=503 if state['fail'] else 200,content_type='application/json',body=json.dumps(state['data']))
+    def ver(route):                                   # 83: 예보가 바뀌었는지(작은 조회). 시험이 값을 바꿀 때 ver 도 바꿈
+        state['vcalls']+=1
+        route.fulfill(status=503 if state['vfail'] else 200,content_type='application/json',body=json.dumps({'c':state['ver'],'d':'d1'}))
     p.route('**/rpc/forecast_cell_detail',reply)
+    p.route('**/rpc/forecast_version',ver)
     p.clock.install()
     p.locator('.fc-detail tbody tr').nth(1).click()
     p.wait_for_function('ForecastUI._state().tailData && ForecastUI._state().tailData.collecting===true')
     return p,state,complete
+
+def wait_calls(p,state,n,key='calls'):
+    for _ in range(60):
+        if state[key]>=n: break
+        p.wait_for_timeout(100)
+    p.wait_for_timeout(150)
 
 def t_tail_progressive_refresh(b):
     p,state,complete=tail_refresh_page(b)
@@ -591,7 +601,10 @@ def t_tail_progressive_refresh(b):
     J(p,"document.querySelector('#fc-tail .fc-scroll').scrollLeft=100")
     scroll=J(p,"document.querySelector('#fc-tail .fc-scroll').scrollLeft")
     geo=p.locator('#fc-tail').bounding_box()
-    state['data']['tail']['bins']=complete[:3]
+    v0=state['vcalls']
+    p.clock.fast_forward(180000); wait_calls(p,state,v0+1,'vcalls')
+    check(state['calls']==1 and state['vcalls']==v0+1,'83: 예보가 그대로면 작은 확인만 하고 다시 받지 않음')
+    state['data']['tail']['bins']=complete[:3];state['ver']='c2'
     p.clock.fast_forward(180000)
     p.wait_for_function(f"document.querySelectorAll('#fc-tail tbody tr:first-child td').length==={before+1}")
     check(state['calls']==2,'하루치가 아닌 다음 한 칸 도착 시 자동 추가')
@@ -603,24 +616,29 @@ def t_tail_progressive_refresh(b):
 def t_tail_refresh_visibility(b):
     p,state,complete=tail_refresh_page(b)
     J(p,"Object.defineProperty(document,'hidden',{configurable:true,get:()=>true});document.dispatchEvent(new Event('visibilitychange'))")
-    p.clock.fast_forward(180000)
-    check(state['calls']==1,'브라우저가 안 보이면 조회 중단')
+    v0=state['vcalls']
+    p.clock.fast_forward(180000); p.wait_for_timeout(300)
+    check(state['calls']==1 and state['vcalls']==v0,'브라우저가 안 보이면 조회(작은 확인 포함) 중단')
+    state['ver']='c2'
     J(p,"Object.defineProperty(document,'hidden',{configurable:true,get:()=>false});document.dispatchEvent(new Event('visibilitychange'))")
-    p.wait_for_function('ForecastUI._state().tailBusy==null')
+    wait_calls(p,state,2)
     check(state['calls']==2,'다시 보이면 밀린 자료 확인')
     J(p,"document.querySelector('#view-forecast').style.display='none'")
-    p.clock.fast_forward(180000)
-    check(state['calls']==2,'다른 탭으로 이동하면 조회 중단')
+    v1=state['vcalls']
+    p.clock.fast_forward(180000); p.wait_for_timeout(300)
+    check(state['calls']==2 and state['vcalls']==v1,'다른 탭으로 이동하면 조회 중단')
+    state['ver']='c3'
     J(p,"document.querySelector('#view-forecast').style.display='';document.dispatchEvent(new Event('visibilitychange'))")
-    p.wait_for_function('ForecastUI._state().tailBusy==null')
+    wait_calls(p,state,3)
     check(state['calls']==3,'예보 화면으로 돌아오면 재개')
     p.locator('.fc-tail-x').click();p.locator('.fc-pin-x').click()
-    p.clock.fast_forward(600000)
-    check(state['calls']==3,'두 창을 모두 닫으면 조회 중단')
+    v2=state['vcalls']
+    p.clock.fast_forward(600000); p.wait_for_timeout(300)
+    check(state['calls']==3,'두 창을 모두 닫으면 격자 자료 조회 중단(일별 창은 열려 있어 작은 확인은 계속)')
 
 def t_tail_refresh_failure_keeps_data(b):
     p,state,complete=tail_refresh_page(b)
-    before=p.locator('#fc-tail tbody').inner_text();state['fail']=True
+    before=p.locator('#fc-tail tbody').inner_text();state['fail']=True;state['ver']='c2'
     p.clock.fast_forward(180000)
     p.wait_for_function('ForecastUI._state().tailRetry===true')
     check(p.locator('#fc-tail tbody').inner_text()==before,'갱신 실패 때 기존 준비 자료 유지')
@@ -629,15 +647,50 @@ def t_tail_refresh_failure_keeps_data(b):
     p.wait_for_function('ForecastUI._state().tailRetry===false')
     check(state['calls']==3,'실패 후 다음 주기에 재시도')
 
-TESTS += [t_tail_progressive_refresh,t_tail_refresh_visibility,t_tail_refresh_failure_keeps_data]
+def t_tail_cache_and_version_fallback(b):
+    """83: 같은 격자를 다시 고르면 기억한 값을 바로 보이고(다시 받지 않음), 작은 확인이 실패하면 예전처럼 다시 받음"""
+    p,state,complete=tail_refresh_page(b)
+    rows=p.locator('.fc-detail tbody tr')
+    rows.nth(2).click(); wait_calls(p,state,2)
+    check(state['calls']==2,'다른 격자는 처음 한 번 받음')
+    rows.nth(1).click(); p.wait_for_timeout(400)
+    check(state['calls']==2 and J(p,f'{S}.tailData.collecting')==True,'앞서 본 격자로 돌아오면 기억한 값을 바로 보임(다시 받지 않음)')
+    state['vfail']=True
+    p.clock.fast_forward(180000); wait_calls(p,state,3)
+    check(state['calls']==3,'작은 확인이 실패하면 예전처럼 다시 받음')
+    check(p.locator('#fc-tail tbody tr').count()>0,'표 유지')
+
+def t_daily_version(b):
+    """83: 일별 창도 10분마다 작은 확인만 하고 d 가 바뀐 때만 다시 받음"""
+    p,m=open_page(b);d=m.fc_cells[0][2][0]
+    st={'daily':0,'d':'d1','v':0}
+    def daily(route):
+        st['daily']+=1; route.fallback()
+    def ver(route):
+        st['v']+=1; route.fulfill(status=200,content_type='application/json',body=json.dumps({'c':'c1','d':st['d']}))
+    p.route('**/rpc/forecast_daily_cell',daily); p.route('**/rpc/forecast_version',ver)
+    J(p,f"SSOpenForecast('{d}')"); p.clock.install()
+    p.locator('.fc-detail tbody tr').first.click(); p.wait_for_selector('#fc-daily table')
+    n=st['daily']
+    p.clock.fast_forward(600000); p.wait_for_timeout(500)
+    check(st['daily']==n and st['v']>=2,'일별: 그대로면 다시 받지 않음')
+    st['d']='d2'
+    p.clock.fast_forward(600000)
+    for _ in range(40):
+        if st['daily']>n: break
+        p.wait_for_timeout(100)
+    check(st['daily']==n+1,'일별: 바뀌면 다시 받음')
+    check(p.locator('#fc-daily table').count()==1,'일별 표 유지')
+
+TESTS += [t_tail_progressive_refresh,t_tail_refresh_visibility,t_tail_refresh_failure_keeps_data,t_tail_cache_and_version_fallback,t_daily_version]
 
 def t_tail_code_cell_arrives(b):
     p,state,complete=tail_refresh_page(b)
-    state['data']['tail']['bins']=complete[:5]
+    state['data']['tail']['bins']=complete[:5];state['ver']='c2'
     p.clock.fast_forward(180000)
     p.wait_for_function('ForecastUI._state().tailData.tail.bins.length===5')
     before=p.locator('#fc-tail tbody tr').first.locator('td').count()
-    state['data']['tail']['bins']=complete[:6]
+    state['data']['tail']['bins']=complete[:6];state['ver']='c3'
     p.clock.fast_forward(180000)
     p.wait_for_function(f"document.querySelectorAll('#fc-tail tbody tr:first-child td').length==={before+1}")
     rows=p.locator('#fc-tail tbody tr')

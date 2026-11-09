@@ -277,6 +277,10 @@ class Mock:
                 return send(200, out)
             if tbl == "save_jurisdiction" and "/rpc/" in path: return self.save_rpc(u, body, send)
             if tbl == "branch_forecast": return send(200, self.branch_forecast if self.usable(u) else [])
+            if tbl == "forecast_version" and "/rpc/" in path:                               # 83: 예보가 바뀌었는지(작은 조회)
+                if not self.usable(u): return send(401, {"message": "login"})
+                self.fc_version_calls = getattr(self, "fc_version_calls", 0) + 1
+                return send(200, {"c": getattr(self, "fc_ver_c", "c1"), "d": getattr(self, "fc_ver_d", "d1")})
             if tbl == "forecast_daily_cell" and "/rpc/" in path:
                 if not self.usable(u): return send(401, {"message": "login"})
                 import datetime as dt
