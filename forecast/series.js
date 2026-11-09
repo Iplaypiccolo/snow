@@ -14,7 +14,10 @@
     var bounds=snow?['강설 없음','시간당 1cm 미만','시간당 1cm 이상']:['강수 없음','시간당 3mm 미만','시간당 3mm 이상 15mm 미만','시간당 15mm 이상'];
     return Number.isInteger(code)&&code>=0&&code<labels.length?{text:labels[code],title:'정성 예보: '+bounds[code]+'. 3시간 누적량이 아닙니다.'}:{text:'-',title:'강수·적설 강도를 확인할 수 없습니다.'};
   }
-  function combine(data){
+  // 기상청 날씨누리처럼 곧 다가올 시각은 빼고 보여 줌(2026-11-09 사용자 결정): 지금을 가장 가까운 정시로 반올림한 시각의 다음 정시부터.
+  // 예) 08:24 → 09시부터, 08:34·08:50 → 10시부터. 반환값 = 표 시작(start)에서 앞의 몇 시각을 뺄지
+  function skipHours(start,now){var s=Date.parse(start);if(!Number.isFinite(s)||!Number.isFinite(now))return 0;var cut=Math.floor((now+30*60000)/H)*H+H;return Math.max(0,Math.min(24,Math.round((cut-s)/H)));}
+  function combine(data,skip){
     if(!data || data.status!=='ok' || !data.upper) return [];
     var upper=data.upper,sr=upper.series||{},start=Date.parse(upper.start_at),groups={};
     if(!Number.isFinite(start)) return [];
@@ -29,7 +32,7 @@
       ['snow','snow_hi','pcp','pcp_hi'].forEach(function(k){old[k]=old.amount_kind==='numeric'?add(old[k],b[k]):null;});
       old.tmin=minimum(old.tmin,b.tmin);old.pop=maximum(old.pop,b.pop);
     }
-    for(var i=0;i<24;i++){
+    for(var i=skip||0;i<24;i++){
       var t=start+i*H,iso=new Date(t).toISOString();
       var snow=sr.s && sr.s[i],rain=sr.p && sr.p[i];
       insert({first_at:iso,last_at:iso,hours:1,snow:snow==null?null:snow,snow_hi:snow==null?null:snow+((sr.sq||[])[i]?1:0),pcp:rain==null?null:rain,pcp_hi:rain==null?null:rain+((sr.pq||[])[i]?1:0),tmin:sr.t && sr.t[i],pop:sr.r && sr.r[i]});
@@ -53,6 +56,6 @@
     });
     return{start_at:upper.start_at,end_at:extra.end_at,series:series};
   }
-  var api={combine:combine,qualitative:qualitative,hourly48:hourly48};
+  var api={combine:combine,qualitative:qualitative,hourly48:hourly48,skipHours:skipHours};
   if(typeof module!=='undefined' && module.exports) module.exports=api;else root.ForecastSeries=api;
 })(typeof window!=='undefined'?window:this);

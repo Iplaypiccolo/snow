@@ -3,6 +3,7 @@
 실행 (저장소 맨 위 폴더에서):  pip install playwright && playwright install chromium  →  python tests/test_forecast_ui.py
 지도 라이브러리(Leaflet)를 인터넷에서 받습니다. 막힌 곳이면 환경변수 LEAFLET_DIR 를 지정하세요(tests/test_jurisdiction_ui.py 와 같음).
 """
+import json
 import sys
 sys.path.insert(0, __file__.rsplit("/", 1)[0])
 import test_jurisdiction_ui as T       # 같은 서버·지도 라이브러리 설정을 재사용
@@ -18,6 +19,7 @@ def open_page(browser, mock=None, user="admin-01", hash=""):
     T.OPENED.append(p)
     p.on("pageerror", lambda e: errors.append(str(e))); p.on("dialog", lambda d: d.accept()); p.route("**/*", T.route)
     m = mock or SBM.Mock()
+    p.add_init_script("window.__fcNow = function () { return Date.parse(%s) - 50 * 60000; };" % json.dumps(m.fc_start))      # 기존 시험: 예보 시작 50분 전(= 앞 정시의 10분)으로 고정 — 기상청식 시작 시각 줄이기가 끼지 않게
     if user != "admin-01": m.users[user]["profile"]["must_change"] = False
     SBM.install(p, m, user)
     p.goto(T.URL + hash); p.wait_for_function("window.ForecastUI && ForecastUI._state().inited", timeout=60000)
@@ -36,7 +38,7 @@ def open_phone(browser, mock=None):
     p = browser.new_page(bypass_csp=True, viewport={"width": 375, "height": 812}, has_touch=True, is_mobile=True)
     T.OPENED.append(p)
     p.on("pageerror", lambda e: errors.append(str(e))); p.on("dialog", lambda d: d.accept()); p.route("**/*", T.route)
-    m = mock or SBM.Mock(); SBM.install(p, m, "admin-01")
+    m = mock or SBM.Mock(); p.add_init_script("window.__fcNow = function () { return Date.parse(%s) - 50 * 60000; };" % json.dumps(m.fc_start)); SBM.install(p, m, "admin-01")
     p.goto(T.URL); p.wait_for_function("window.ForecastUI && ForecastUI._state().inited", timeout=60000)
     p.evaluate("document.querySelector('.tab-btn[data-tab=forecast]').click()"); p.wait_for_timeout(900)
     return p, m
@@ -775,6 +777,26 @@ def t_hourly_48_without_hover_notes(b):
         check('정성' not in p.locator(root).inner_text(),'정성예보문구없음 '+root)
 
 TESTS += [t_hourly_48_without_hover_notes]
+
+def t_kma_start_hour(b):
+    """2026-11-09: 격자 창의 1시간·3시간 표는 기상청처럼 곧 다가올 시각을 뺌. 매시 30분 전 = 다음 정시부터, 30분부터 = 그다음 정시부터"""
+    p, m = open_page(b); p.click(".tab-btn[data-tab=forecast]"); p.wait_for_timeout(600)
+    d = bid(p, "대관령"); p.click("#fc-tree [data-fchq='강원']"); p.wait_for_timeout(500); p.click(f"#fc-tree [data-fcbr='{d}']"); p.wait_for_timeout(900)
+    p.wait_for_function("document.querySelectorAll('#fc-pin thead tr:last-child th:not(.lb)').length===48")
+    hrs = lambda: p.locator('#fc-pin table.fc-t1 thead tr').last.locator('th:not(.lb)').all_inner_texts()
+    h10 = hrs(); check(len(h10) == 48, f"매시 10분: 48칸 그대로 {len(h10)}")
+    n3a = p.locator('#fc-tail table.fc-three tbody tr').first.locator('td').count()
+    p.add_init_script("window.__fcNow = function () { return Date.parse(%s) - 20 * 60000; };" % json.dumps(m.fc_start))      # 시작 20분 전 = 앞 정시의 40분. 나중에 넣은 것이 이김
+    p.reload(); p.wait_for_function("window.ForecastUI && ForecastUI._state().inited", timeout=60000)
+    p.click(".tab-btn[data-tab=forecast]"); p.wait_for_timeout(600); p.click("#fc-tree [data-fchq='강원']"); p.wait_for_timeout(500); p.click(f"#fc-tree [data-fcbr='{d}']"); p.wait_for_timeout(900)
+    p.wait_for_function("document.querySelectorAll('#fc-pin thead tr:last-child th:not(.lb)').length===47")
+    h40 = hrs()
+    check(len(h40) == 47 and h40[0] == h10[1], f"매시 40분: 첫 시각을 빼고 그다음 정시부터 {h40[:3]} / {h10[:3]}")
+    n3b = p.locator('#fc-tail table.fc-three tbody tr').first.locator('td').count()
+    first3 = J(p, f"ForecastSeries.combine({S}.tailData, 1)[0].first_at") ; st = J(p, f"{S}.tailData.upper.start_at")
+    check(J(p, f"Date.parse('{first3}') - Date.parse('{st}')") == 3600000 and n3b <= n3a, f"3시간 표도 같은 시각부터: {first3} / {st}")
+    check(J(p, "ForecastSeries.skipHours('2026-11-09T00:00:00Z', Date.parse('2026-11-08T23:24:00Z'))") == 0 and J(p, "ForecastSeries.skipHours('2026-11-09T00:00:00Z', Date.parse('2026-11-08T23:34:00Z'))") == 1 and J(p, "ForecastSeries.skipHours('2026-11-09T00:00:00Z', Date.parse('2026-11-08T23:50:00Z'))") == 1, "08:24 → 다음 정시부터, 08:34·08:50 → 그다음 정시부터")
+TESTS += [t_kma_start_hour]
 
 if __name__ == "__main__":
     only = sys.argv[1:]

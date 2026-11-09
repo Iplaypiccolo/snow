@@ -145,10 +145,11 @@
       '<tr><th class="lb t">' + (step === 1 ? '기온' : '최저기온') + '<small>℃</small></th>' + rt + '</tr></tbody></table>';
   }
   // big = false: 마우스 말풍선, true: 24개 시각을 한 줄로 가로 스크롤
+  function fcNow() { return typeof window.__fcNow === 'function' ? window.__fcNow() : Date.now(); }      // 시험에서 시각을 정할 수 있게
   function trendBox(sr, start, big) {
     if (!sr) return '';
     if (!big) return '<div class="fc-trend-box">' + tableBlock(sr, start, 0, 24, 3) + '<div class="fc-tt-cap">칸 = 그 시각부터 3시간 합 (기온은 최저' + (sr.r && sr.r.length ? ', 확률은 최고' : '') + ')</div></div>';
-    return '<div class="fc-trend-box big"><div class="fc-scroll" tabindex="0" aria-label="48시간 예보 가로 스크롤">'+tableBlock(sr,start,0,Math.min(48,(sr.s||[]).length),1)+'</div></div>';
+    return '<div class="fc-trend-box big"><div class="fc-scroll" tabindex="0" aria-label="48시간 예보 가로 스크롤">'+tableBlock(sr,start,window.ForecastSeries.skipHours(start,fcNow()),Math.min(48,(sr.s||[]).length),1)+'</div></div>';
   }
   // 고정 창 위치·크기(컴퓨터 화면만, 2026-11-03): scale = 글자·표 배율, x·y = 지도 안 왼쪽 위(null = 처음 자리 오른쪽 위). 지도보다 커지거나 밖으로 나가지 않게 맞춤
   var PIN_KEY = 'ss_fc_pin', PIN_BODY = 440, PIN_PAD = 14, PIN_MIN = 0.8;      // PIN_BODY·PIN_PAD = 배율 1일 때 표 폭·창 안팎 여백(px)
@@ -209,7 +210,7 @@
     return f(a) + '~' + f(b);
   }
   function tailTables(data) {
-    var bins=window.ForecastSeries.combine(data);
+    var bins=window.ForecastSeries.combine(data,window.ForecastSeries.skipHours(data&&data.upper&&data.upper.start_at,fcNow()));
     if(!bins.length)return '<p>표시할 예보 자료가 없습니다.</p>';
     var html='<div class="fc-scroll" tabindex="0" aria-label="3시간 예보 가로 스크롤"><table class="fc-tt fc-three"><thead>'+forecastHeader(bins,false)+'</thead><tbody>';
     [['신적설 cm','snow','snow_hi'],['강수 mm','pcp','pcp_hi'],['확률 %','pop'],['최저 ℃','tmin']].forEach(function(row){
