@@ -126,7 +126,7 @@ def t_pin_chart(b):
     hrs = [h.split("\n")[0] for h in heads]
     check(len(hrs) == 8 and all(int(hrs[i]) == (int(hrs[0]) + 3 * i) % 24 for i in range(8)), f"3시간 표 머리글 = 3시간 간격 8칸 {hrs}")
     rows = [r.locator("th.lb").inner_text() for r in t3.locator("tbody tr").all()]
-    check([x.startswith(y) for x, y in zip(rows, ["신적설", "강수", "확률", "최저기온"])] == [True] * 4 and len(rows) == 4, f"행(강수확률 포함): {rows}")
+    check([x.startswith(y) for x, y in zip(rows, ["신적설", "강수", "강수확률", "최저기온"])] == [True] * 4 and len(rows) == 4, f"행(강수확률 포함): {rows}")
     vals = [float(x) for x in t3.locator("tbody tr").first.locator("td").all_inner_texts() if x not in ("-", "0", "")]
     import re as _re
     tiptext = tp.inner_text(); tot = float(_re.search(r"24시간 적설 ([\d.]+)cm", tiptext).group(1))
@@ -149,7 +149,7 @@ def t_pin_chart(b):
           "범례: 체크박스(적설·강수·확률·기온) + 적설량 색띠만: " + leg.inner_text().replace("\n", " "))
     check([leg.locator(f"[data-fcshow={k}]").is_checked() for k in "spot"] == [True, False, False, True], "체크박스 기본 = 적설·기온")
     prow = [r.locator("th.lb").inner_text() for r in pin0.locator("table.fc-t1").first.locator("tbody tr").all()]
-    check(len(prow) == 5 and prow[2].startswith("확률") and prow[4].startswith("습도") and pin0.locator(".fc-tt-sum").count()==0, f"고정 창 표의 강수확률 줄·합계 설명 제거, 85 습도 줄: {prow}")
+    check(len(prow) == 5 and prow[2].startswith("강수확률") and prow[4].startswith("습도") and pin0.locator(".fc-tt-sum").count()==0, f"고정 창 표의 강수확률 줄·합계 설명 제거, 85 습도 줄: {prow}")
     mine = [c for c in m.fc_cells if d in c[2]]; hot = [c for c in mine if max(c[3], c[10] or 0) > 0 or max(c[4], c[9] or 0) > 0]
     check(p.locator("#fmap .fc-label.hot").count() == len(hot) and p.locator("#fmap .fc-label.calm").count() == len(mine) - len(hot) and len(hot) > 0, f"지도 칸: 적설·강수가 있는 칸만 크게({len(hot)}칸), 나머지는 흐리게")
     lab = p.locator("#fmap .fc-label").first

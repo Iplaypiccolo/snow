@@ -145,7 +145,7 @@
     for(var j=from;j<to;j++){var stamp=new Date(Date.parse(start)+j*3600e3).toISOString();slots.push({first_at:stamp,last_at:stamp,vs:j<vn});}
     return '<table class="fc-tt fc-t' + step + '"><thead>' + (step===1?forecastHeader(slots,true):'<tr><th class="lb">시</th>'+head+'</tr>') + '</thead><tbody>' +
       '<tr><th class="lb s">신적설<small>cm</small></th>' + rs + '</tr><tr><th class="lb p">강수<small>mm</small></th>' + rp + '</tr>' +
-      (hasPop ? '<tr><th class="lb o">확률<small>%</small></th>' + ro + '</tr>' : '') +
+      (hasPop ? '<tr><th class="lb o">강수확률<small>%</small></th>' + ro + '</tr>' : '') +      // 2026-11-09 사용자: '확률' → '강수확률'
       '<tr><th class="lb t">' + (step === 1 ? '기온' : '최저기온') + '<small>℃</small></th>' + rt + '</tr>' +
       (hasHum ? '<tr><th class="lb h">습도<small>%</small></th>' + rh + '</tr>' : '') + '</tbody></table>';
   }
@@ -218,7 +218,7 @@
     var bins=window.ForecastSeries.combine(data,window.ForecastSeries.skipHours(data&&data.upper&&data.upper.start_at,fcNow()));
     if(!bins.length)return '<p>표시할 예보 자료가 없습니다.</p>';
     var html='<div class="fc-scroll" tabindex="0" aria-label="3시간 예보 가로 스크롤"><table class="fc-tt fc-three"><thead>'+forecastHeader(bins,false)+'</thead><tbody>';
-    var rows=[['신적설 cm','snow','snow_hi'],['강수 mm','pcp','pcp_hi'],['확률 %','pop'],['최저 ℃','tmin']];
+    var rows=[['신적설 cm','snow','snow_hi'],['강수 mm','pcp','pcp_hi'],['강수확률 %','pop'],['기온 ℃','tmin']];      // 2026-11-09 사용자: 이름만 '강수확률'·'기온'(값은 그대로 3시간 최고 확률·최저 기온)
     if(bins.some(function(b){return b.reh!=null;}))rows.push(['습도 %','reh']);      // 86: 3시간 중 최고 습도
     rows.forEach(function(row){
       html+='<tr><th class="lb">'+row[0]+'</th>'+bins.map(function(b){
