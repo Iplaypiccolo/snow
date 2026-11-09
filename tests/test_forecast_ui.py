@@ -145,8 +145,8 @@ def t_pin_chart(b):
     hours=pin0.locator('table.fc-t1 thead tr').last.locator('th:not(.lb)').all_inner_texts()
     check(len(hours)==48 and all(x.isdigit() for x in hours),'아랫행48개 시각')
     leg = p.locator("#fc-legend")
-    check(leg.locator(".fc-show").inner_text().split() == ["적설", "강수", "최대", "확률", "최저", "기온"] and leg.locator(".fc-ramp li").count() == 6 and "cm" not in leg.inner_text() and "mm" not in leg.inner_text() and "마우스" not in leg.inner_text(),
-          "범례: 24시간 + 체크박스(적설·강수·최대 확률·최저 기온) + 적설량 색띠만: " + leg.inner_text().replace("\n", " "))
+    check(leg.locator(".fc-show").inner_text().split() == ["적설", "강수", "최대", "확률", "최저", "기온", "최대", "습도"] and leg.locator(".fc-ramp li").count() == 6 and "cm" not in leg.inner_text() and "mm" not in leg.inner_text() and "마우스" not in leg.inner_text(),
+          "범례: 24시간 + 체크박스(적설·강수·최대 확률·최저 기온·최대 습도) + 적설량 색띠만: " + leg.inner_text().replace("\n", " "))
     check([leg.locator(f"[data-fcshow={k}]").is_checked() for k in "spot"] == [True, False, False, True], "체크박스 기본 = 적설·기온")
     prow = [r.locator("th.lb").inner_text() for r in pin0.locator("table.fc-t1").first.locator("tbody tr").all()]
     check(len(prow) == 5 and prow[2].startswith("강수확률") and prow[4].startswith("습도") and pin0.locator(".fc-tt-sum").count()==0, f"고정 창 표의 강수확률 줄·합계 설명 제거, 85 습도 줄: {prow}")
@@ -166,7 +166,7 @@ def t_pin_chart(b):
     check(pin.is_visible() and key and J(p,f'{S}.pin')==key, f"격자를 누르면 그 격자 그림 고정: {key}")
     check(pin.locator("svg").count() == 0 and pin.locator("table.fc-t1").count() == 1, "고정 창:24개 시각 한 표")
     h1 = [x.split("\n")[0] for x in pin.locator("table.fc-t1").first.locator("thead tr").last.locator("th:not(.lb)").all_inner_texts()]
-    check(len(h1) == 48 and all(int(h1[i].replace("시", "")) == (int(h1[0].replace("시", "")) + i) % 24 for i in range(48)), f"1시간 표 머리글48칸 {h1}")
+    check(len(h1) == 48 and all(int(h1[i].replace("시", "")) % 24 == (int(h1[0].replace("시", "")) + i) % 24 for i in range(48)), f"1시간 표 머리글48칸(자정은 24) {h1}")
     pb = pin.locator(".fc-trend-box").bounding_box(); check(pb and 500 <= pb["width"] <= 540, f"2026-11-09: 왼쪽 제목 칸을 없애 표가 창 폭을 다 씀(배율 1.2): {pb and pb['width']}")
     check(J(p, f"(() => {{ const l = {S}.cells.getLayers().find(l => l.getLatLngs && l.options.weight === 4); return !!l }})()"), "고정한 격자는 굵은 테두리")
     p.wait_for_timeout(350); J(p, f"(() => {{ {S}.map.fire('click', {{ latlng: {S}.map.getCenter() }}); return null }})()"); p.wait_for_timeout(200)
@@ -183,7 +183,7 @@ def t_legend_show(b):
     check(labels(p) == len(mine) and set(kinds()) == {"B+EM"}, f"가까이: 기본은 칸마다 적설·기온 두 줄 {set(kinds())}")
     for k in "po": p.check(f"#fc-legend [data-fcshow={k}]")
     p.wait_for_timeout(200); check(set(kinds()) == {"B+SPAN+I+EM"}, f"모두 체크: 네 줄(적설·강수·확률·기온) {set(kinds())}")
-    check(J(p, "JSON.parse(localStorage.getItem('ss_fc_show'))") == {"s": True, "p": True, "o": True, "t": True}, "체크한 값을 브라우저에 저장")
+    check(J(p, "JSON.parse(localStorage.getItem('ss_fc_show'))") == {"s": True, "p": True, "o": True, "t": True, "h": False}, "체크한 값을 브라우저에 저장(최대 습도는 끈 채)")
     z0 = J(p, f"{S}.map.getZoom()")
     J(p, f"(() => {{ {S}.map.setZoom({z0} - 1, {{ animate: false }}); return null }})()"); p.wait_for_timeout(400)
     ks = kinds()
@@ -904,7 +904,12 @@ def t_side_fold_legend_daylines(b):
     lg = p.locator('#fc-legend')
     check(lg.locator('.fc-legend-t').inner_text() == '24시간' and lg.inner_text().strip().startswith('24시간'), '범례 맨 앞 24시간')
     names = [x.inner_text() for x in lg.locator('label.fc-chk span').all()]
-    check(names == ['적설', '강수', '최대\n확률', '최저\n기온'], f'범례 이름(두 줄) {names}')
+    check(names == ['적설', '강수', '최대\n확률', '최저\n기온', '최대\n습도'], f'범례 이름(두 줄, 2026-11-10 최대 습도) {names}')
+    check(not lg.locator('[data-fcshow=h]').is_checked(), '최대 습도는 처음엔 꺼 둠')
+    lg.locator('[data-fcshow=h]').check(); p.wait_for_timeout(300)
+    hum = p.locator('.leaflet-tooltip.fc-label u').all_inner_texts()
+    check(len(hum) > 0 and all(x.endswith('%') and 60 <= int(x[:-1]) <= 100 for x in hum), f'켜면 지도 칸에 24시간 최고 습도 {hum[:5]}')
+    lg.locator('[data-fcshow=h]').uncheck(); p.wait_for_timeout(200)
     mw = p.locator('#fmap').bounding_box()['width']
     p.locator('.fc-side-tog').click(); p.wait_for_timeout(300)
     side = p.locator('#view-forecast .jr-side').bounding_box()
@@ -917,7 +922,9 @@ def t_side_fold_legend_daylines(b):
         bw = J(p, f"(() => {{ const c=document.querySelector('{root} {sel}'); return c ? getComputedStyle(c).borderLeftWidth : null }})()")
         check(n > 0 and bw and float(bw[:-2]) >= 1.5, f'{root}: 날짜가 바뀌는 칸 진한 선(창 배율로 1.67px 등) {n} {bw}')
     first_day = J(p, "(() => { const t=document.querySelector('#fc-pin table'); const ths=[...t.querySelectorAll('thead tr:last-child th:not(.lb)')]; const i=ths.findIndex(th=>th.classList.contains('dl')); return [i, ths.length] })()")
-    check(first_day[0] > 0, f'1시간 표: 첫 칸이 아닌 자정 칸에 선 {first_day}')
+    check(first_day[0] > 0, f'1시간 표: 첫 칸이 아닌 날짜 바뀌는 칸에 선 {first_day}')
+    hrs1 = p.locator('#fc-pin thead tr').last.locator('th:not(.lb)').all_inner_texts()
+    check('00' not in hrs1 and '24' in hrs1 and hrs1[hrs1.index('24') + 1] == '01' and hrs1[first_day[0]] == '01', f'2026-11-10: 1시간 표도 자정은 앞날 24시, 다음 날은 01시부터 {hrs1[:6]} {first_day}')
     # 2026-11-09 사용자: 세 창 글자 크기·모양 통일(일별 표 기준), 항목 이름 한 줄, 3시간 '강수강도'
     fonts = J(p, """['fc-pin','fc-tail','fc-daily'].map(id => { const b=document.getElementById(id); return ['thead tr:last-child th:not(.lb)','tbody th.lb'].map(q => { const c=getComputedStyle(b.querySelector(q)); return c.fontFamily+'|'+c.fontSize+'|'+c.fontWeight; }).join('/') })""")
     check(len(set(fonts)) == 1, f'세 창 머리글·항목 글꼴·크기 같음 {fonts}')

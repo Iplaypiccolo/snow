@@ -325,7 +325,7 @@ class Mock:
                 if ser and len(ids) > 1: return send(400, {"message": "series for one branch only"})
                 (self.fc_series_calls if ser else self.fc_calls).append(sorted(ids))
                 return send(200, {"tmfc": self.fc_issued, "start_at": self.fc_start, "end_at": self.fc_end,
-                                  "cells": [[nx, ny, [b for b in bs if b in ids], s, p, t, ta, sr if ser else None, pop, ph, sh] for nx, ny, bs, s, p, t, ta, sr, pop, ph, sh in self.fc_cells if ids & set(bs)]})
+                                  "cells": [[nx, ny, [b for b in bs if b in ids], s, p, t, ta, sr if ser else None, pop, ph, sh, 60 + (nx + ny) % 41] for nx, ny, bs, s, p, t, ta, sr, pop, ph, sh in self.fc_cells if ids & set(bs)]})      # 마지막 = 24시간 최고 습도(90)
             if tbl == "warning_status" and "/rpc/" in path:
                 self.eq_calls.append((tbl, body)); return send(200, self.warn_status) if self.usable(u) else send(401, {"message": "login"})
             if tbl in ("save_fleet", "save_requests") and "/rpc/" in path:

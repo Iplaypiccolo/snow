@@ -62,10 +62,9 @@ function initApp(){
   legend.onAdd = function(){
     var div = L.DomUtil.create('div','legend');
     div.innerHTML =
+      // 2026-11-10 사용자: 범례를 두 줄로(노선 한 줄, 관측소 거리 한 줄)
       '<div class="row"><span class="line"></span> 고속도로 중심선</div>'+
-      '<div class="row"><span class="dot" style="background:#0b5d38"></span> 0 ~ 3km</div>'+
-      '<div class="row"><span class="dot" style="background:#c97a2b"></span> 3 ~ 6km</div>'+
-      '<div class="row"><span class="dot" style="background:#b5432f"></span> 6 ~ 8km</div>';
+      '<div class="row">관측소 거리 <span class="dot" style="background:#0b5d38"></span> 0~3 <span class="dot" style="background:#c97a2b"></span> 3~6 <span class="dot" style="background:#b5432f"></span> 6~8km</div>';
     return div;
   };
   legend.addTo(map);

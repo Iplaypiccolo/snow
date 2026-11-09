@@ -36,9 +36,9 @@
   function snowColor(v) { if (v == null) return '#d8d6cc'; for (var i = 0; i < SCALE.length; i++) if (v >= SCALE[i][0]) return SCALE[i][1]; return '#eef3f8'; }
 
   // 지도 칸에 보일 값 — 범례의 체크박스(2026-10-10). 기본 = 적설·기온. 이 브라우저에 기억(localStorage)
-  var SHOW_KEY = 'ss_fc_show', SHOW_ITEMS = [['s', '적설'], ['p', '강수'], ['o', '최대<br>확률'], ['t', '최저<br>기온']];      // 이름에 <br> = 두 줄(2026-11-09 사용자)
+  var SHOW_KEY = 'ss_fc_show', SHOW_ITEMS = [['s', '적설'], ['p', '강수'], ['o', '최대<br>확률'], ['t', '최저<br>기온'], ['h', '최대<br>습도']];      // h = 24시간 최고 습도(마이그레이션 90, 2026-11-10 사용자)      // 이름에 <br> = 두 줄(2026-11-09 사용자)
   function loadShow() {
-    var d = { s: true, p: false, o: false, t: true };
+    var d = { s: true, p: false, o: false, t: true, h: false };
     try { var j = JSON.parse(localStorage.getItem(SHOW_KEY) || 'null'); if (j && typeof j === 'object') SHOW_ITEMS.forEach(function (x) { if (typeof j[x[0]] === 'boolean') d[x[0]] = j[x[0]]; }); } catch (e) {}
     return d;
   }
@@ -130,9 +130,9 @@
     function hour(x){return p2(new Date(Date.parse(x)+9*3600e3).getUTCHours());}
     var days=[],times='',label0=label||'시간';      // 2026-11-09 사용자: 창 왼쪽 제목(1시간·3시간)을 표의 시간 칸 이름으로
     slots.forEach(function(b){
-      // 89: 3시간 칸은 기상청처럼 그 시각 하나(03·06…, 자정은 앞날의 24)
-      var at=hourly?b.first_at:new Date(Date.parse(b.slot_at)-3600e3).toISOString(), day=date(at), label=hourly?hour(b.first_at):hour(b.slot_at);
-      if(!hourly && label==='00') label='24';
+      // 89: 3시간 칸은 그 시각 하나. 2026-11-10 사용자: 1시간도 날씨누리처럼 자정은 앞날의 24시, 다음 날은 01시부터
+      var t=hourly?b.first_at:b.slot_at, at=new Date(Date.parse(t)-3600e3).toISOString(), day=date(at), label=hour(t);
+      if(label==='00') label='24';
       var prev=days[days.length-1],dl=!!prev&&prev.day!==day;if(prev&&!dl)prev.n++;else days.push({day:day,n:1});
       times+='<th'+(b.vs||dl?' class="'+(b.vs?'vs':'')+(dl?' dl':'')+'"':'')+'>'+label+'</th>';
     });
@@ -142,7 +142,7 @@
   function hourTable(sr, start, from, to) {
     var rs = '', rp = '', rt = '', ro = '', rh = '', hasPop = !!(sr.r && sr.r.length), vn = sr.vn || 0;
     var hasHum = !!(sr.h && sr.h.slice(from, to).some(function (v) { return v != null; }));      // r = 강수확률, h = 습도(85): 서버에 있을 때만 줄을 보임. vn = 앞에서 몇 시각이 초단기 값인지
-    var dayAt = function (i) { var d = hourAt(start, i); return d ? kstDateLabel(d.toISOString()) : ''; };
+    var dayAt = function (i) { var d = hourAt(start, i); return d ? kstDateLabel(new Date(d.getTime() - 3600e3).toISOString()) : ''; };      // 자정(24시)은 앞날
     function mark(html, i, vs) { var c = (vs && i < vn ? 'vs ' : '') + (i > from && dayAt(i) !== dayAt(i - 1) ? 'dl ' : ''); return c ? html.replace('<td class="', '<td class="' + c) : html; }      // dl = 날짜가 바뀌는 칸(진한 선)
     function at(k, i) { var a = sr[k]; return a && a[i] != null ? a[i] : null; }
     for (var i = from; i < to; i++) {
@@ -252,7 +252,8 @@
     // 옮기기: 표 왼쪽 항목 칸(th.lb)이나 창 테두리 여백을 끌기(2026-11-09 왼쪽 제목 칸을 없앤 뒤)
     // 크기(2026-11-09 사용자): 창 왼쪽·오른쪽 옆면 = 글자 그대로 표 폭만(좌우 화살표), 아래 모서리 = 글자·표 배율(대각선 화살표)
     var t = e.target, grip = t.closest && (t.closest('.fc-pin-grip') || t.closest('.fc-pin-edge')), cl = t.classList || { contains: function () { return false; } };
-    var handle = t.closest && (t.closest('.fc-pin th.lb,.fc-tail th.lb,.fc-daily th.lb') || cl.contains('fc-pin') || cl.contains('fc-tail') || cl.contains('fc-daily') || cl.contains('fc-pin-in'));
+    var handle = t.closest && (t.closest('.fc-pin th.lb,.fc-tail th.lb,.fc-daily th.lb,.fc-pin thead th,.fc-tail thead th,.fc-daily thead th') ||      // 2026-11-10 사용자: 제목 칸(머리글)을 끌어 옮기기
+      cl.contains('fc-pin') || cl.contains('fc-tail') || cl.contains('fc-daily') || cl.contains('fc-pin-in'));
     if (!grip && (!handle || t.closest('button'))) return;
     var box = t.closest('.fc-pin,.fc-tail,.fc-daily'), geo = geoOf(box.id), r = box.getBoundingClientRect(), mr = box.parentNode.getBoundingClientRect(), sx = e.clientX, sy = e.clientY, x0 = r.left - mr.left, y0 = r.top - mr.top, w0 = r.width, left = !!grip && (grip.dataset.grip || grip.dataset.edge) === 'l', mode = grip ? (grip.dataset.edge ? 'w' : 'z') : null;
     e.preventDefault();
@@ -453,7 +454,7 @@
     var g = S.grid[S.hq]; if (!g || !g.cells) return;
     var fresh = g.tmfc && Date.now() - Date.parse(g.tmfc) <= STALE, fit = fitLines(cellPx());
     g.cells.forEach(function (c) {
-      var nx = c[0], ny = c[1], bs = c[2] || [], snow = fresh ? c[3] : null, pcp = fresh ? c[4] : null, tmin = fresh ? c[5] : null, tat = fresh ? c[6] : null, pop = fresh && c[8] != null ? c[8] : null, phi = fresh ? c[9] : null, shi = fresh ? c[10] : null;      // phi·shi = 범위 위쪽(62)
+      var nx = c[0], ny = c[1], bs = c[2] || [], snow = fresh ? c[3] : null, pcp = fresh ? c[4] : null, tmin = fresh ? c[5] : null, tat = fresh ? c[6] : null, pop = fresh && c[8] != null ? c[8] : null, phi = fresh ? c[9] : null, shi = fresh ? c[10] : null, reh = fresh && c[11] != null ? c[11] : null;      // phi·shi = 범위 위쪽(62), reh = 24시간 최고 습도(90)
       var mine = S.focus ? bs.indexOf(S.focus) >= 0 : true;
       if (S.focus && !mine) return;                                  // 지사를 고르면 그 지사 격자만
       var col = S.focus ? snowColor(snow > 0 ? snow : shi > 0 ? 0.5 : snow) : JC.colorOf(st(), bs[0], S.hq);      // ~1cm 만 있으면 '<1' 색
@@ -472,9 +473,9 @@
       if (S.focus) {                                                 // 지사: 격자마다 값(적설 / 강수)
         var sv = Math.max(snow || 0, shi || 0), pv = Math.max(pcp || 0, phi || 0);      // 범위가 있으면 위쪽으로 '있음' 판단
         var hot = sv > 0 || pv > 0, zc = function (v) { return v > 0 ? '' : ' class="z"'; };      // 적설·강수가 있는 칸만 크게, 0 은 흐리게
-        var has = { s: sv > 0, p: pv > 0, o: pop > 0, t: tmin != null };
-        var html = { s: '<b' + zc(sv) + '>' + rng(snow, shi) + '</b>', p: '<span' + zc(pv) + '>' + rng(pcp, phi) + '</span>', o: '<i' + zc(pop) + '>' + pct(pop) + '%</i>', t: '<em>' + tmp(tmin) + '°</em>' };
-        var on = ['s', 'p', 'o', 't'].filter(function (k) { return S.show[k] && !(k === 'o' && pop == null); });      // 체크한 값(적설 > 강수 > 확률 > 기온 순)
+        var has = { s: sv > 0, p: pv > 0, o: pop > 0, t: tmin != null, h: reh != null };
+        var html = { s: '<b' + zc(sv) + '>' + rng(snow, shi) + '</b>', p: '<span' + zc(pv) + '>' + rng(pcp, phi) + '</span>', o: '<i' + zc(pop) + '>' + pct(pop) + '%</i>', t: '<em>' + tmp(tmin) + '°</em>', h: '<u>' + pct(reh) + '%</u>' };
+        var on = ['s', 'p', 'o', 't', 'h'].filter(function (k) { return S.show[k] && !(k === 'o' && pop == null) && !(k === 'h' && reh == null); });      // 체크한 값(적설 > 강수 > 확률 > 기온 > 습도 순)
         if (on.length > fit) {                                       // 다 못 넣으면: 값이 있는 것 먼저, 같은 조건이면 위 순서대로
           var pick = on.filter(function (k) { return has[k]; }).concat(on.filter(function (k) { return !has[k]; })).slice(0, fit);
           on = on.filter(function (k) { return pick.indexOf(k) >= 0; });

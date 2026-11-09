@@ -22,7 +22,7 @@
 .fc-chk span{display:inline-block;line-height:1.05;text-align:center;}      /* 최대/확률·최저/기온 두 줄 */
 .fc-legend-t{font-weight:800;font-size:12.5px;color:var(--ink);align-self:center;}
 .fc-chk input{width:15px;height:15px;margin:0;accent-color:var(--accent);cursor:pointer;}
-.fc-chk.s{color:#1d4fa0;} .fc-chk.p{color:#2f7d4f;} .fc-chk.o{color:#1f7a8c;} .fc-chk.t{color:#b0392b;}
+.fc-chk.s{color:#1d4fa0;} .fc-chk.p{color:#2f7d4f;} .fc-chk.o{color:#1f7a8c;} .fc-chk.t{color:#b0392b;} .fc-chk.h{color:#6a4c93;}
 .fc-ramp{display:inline-flex;align-items:center;gap:8px;}
 .fc-ramp-t{font-weight:700;font-size:11.5px;}
 .fc-ramp ol{display:flex;margin:0;padding:0;list-style:none;}
@@ -37,12 +37,13 @@
 .leaflet-tooltip.fc-label span{display:block;color:#2f7d4f;font-size:10px;}
 .leaflet-tooltip.fc-label em{display:block;color:#b0392b;font-size:10px;font-style:normal;}
 .leaflet-tooltip.fc-label i{display:block;font-style:normal;color:#1f7a8c;font-size:10px;}
+.leaflet-tooltip.fc-label u{display:block;text-decoration:none;color:#6a4c93;font-size:10px;}      /* 24시간 최고 습도(90) */
 /* 값이 있는 칸만 크게(hot), 적설·강수가 모두 0 인 칸은 작고 흐리게(calm). 0 인 숫자는 회색 */
 .leaflet-tooltip.fc-label.hot{font-size:13px;border-width:1.5px;padding:2px 6px;z-index:2;}
-.leaflet-tooltip.fc-label.hot b{font-size:14px;} .leaflet-tooltip.fc-label.hot span{font-size:12px;} .leaflet-tooltip.fc-label.hot i,.leaflet-tooltip.fc-label.hot em{font-size:11px;}
+.leaflet-tooltip.fc-label.hot b{font-size:14px;} .leaflet-tooltip.fc-label.hot span{font-size:12px;} .leaflet-tooltip.fc-label.hot i,.leaflet-tooltip.fc-label.hot em,.leaflet-tooltip.fc-label.hot u{font-size:11px;}
 /* 칸이 작아 한두 줄만 들어갈 때(tight): 여백을 줄이고 글자는 한 크기로 */
 .leaflet-tooltip.fc-label.tight{padding:0 3px;border-width:1px;font-size:11px;line-height:1.2;}
-.leaflet-tooltip.fc-label.tight b,.leaflet-tooltip.fc-label.tight span,.leaflet-tooltip.fc-label.tight i,.leaflet-tooltip.fc-label.tight em{font-size:11px;font-weight:700;}
+.leaflet-tooltip.fc-label.tight b,.leaflet-tooltip.fc-label.tight span,.leaflet-tooltip.fc-label.tight i,.leaflet-tooltip.fc-label.tight em,.leaflet-tooltip.fc-label.tight u{font-size:11px;font-weight:700;}
 .leaflet-tooltip.fc-label.calm{opacity:.62;border-color:#9fb0bf;background:rgba(255,255,255,.7);}
 .leaflet-tooltip.fc-label .z{color:#9aa8b4;font-weight:400;}
 /* 격자 마우스·고정: 24시간 추이 표(그림 대신). 마우스 말풍선 283px(=236×1.2), 고정 창 396px(=330×1.2) */
@@ -131,7 +132,7 @@ body.fc-pin-moving{user-select:none;}
 }
 
 /* 두 창 모두 한 줄 타임라인: 창 폭/글자 배율과 표 전체 폭을 분리한다. */
-.fc-scroll{width:100%;overflow-x:auto;overscroll-behavior-x:contain;padding-bottom:5px;}
+.fc-scroll{position:relative;width:100%;overflow-x:auto;overscroll-behavior-x:contain;padding-bottom:5px;}      /* relative: 일별 표의 숨긴 날씨 이름(absolute)이 스크롤 밖으로 나가 화면 오른쪽에 빈칸·가로 스크롤을 만들지 않게(2026-11-10) */
 .fc-scroll .fc-tt{width:max-content;min-width:100%;table-layout:auto;}
 .fc-scroll .fc-tt td,.fc-scroll .fc-tt thead tr:last-child th{min-width:38px;white-space:nowrap;padding:4px 5px;}
 .fc-scroll .fc-three td,.fc-scroll .fc-three thead tr:last-child th{min-width:38px;}
@@ -204,7 +205,7 @@ body.fc-pin-moving{user-select:none;}
 .fc-x:hover,.fc-x:focus-visible{background:#c02024;}
 @media(min-width:761px){
   .fc-pin,.fc-tail,.fc-daily{overflow:visible;}
-  .fc-pin th.lb,.fc-tail th.lb,.fc-daily th.lb{cursor:move;user-select:none;touch-action:none;}
+  .fc-pin th.lb,.fc-tail th.lb,.fc-daily th.lb,.fc-pin thead th,.fc-tail thead th,.fc-daily thead th{cursor:move;user-select:none;touch-action:none;}
 }
 /* 날짜가 바뀌는 칸: 진한 선(머리글은 어두운 바탕이라 밝은 선) */
 .fc-tt td.dl,.fc-tt tbody th.dl,.fc-daily-table td.dl{border-left:2px solid #24405c !important;}
@@ -239,3 +240,4 @@ body.fc-pin-moving{user-select:none;}
 /* 3시간 강도(약한비·보통비·많은 눈…): 조금 작고 연하게 */
 .fc-tt td.fc-qual{font-size:10px;font-weight:400;color:#3d5a72;letter-spacing:-0.05em;background:#f3f8fc;}
 @media(max-width:760px){.fc-tt th.lb{font-size:10px;white-space:normal;letter-spacing:-0.1em;}}
+#view-forecast .jr-mapbox{overflow:hidden;}      /* 예보 지도 밖으로 아무것도 나가지 않게(창 손잡이·× 포함) */

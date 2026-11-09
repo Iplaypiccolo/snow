@@ -44,6 +44,13 @@
 
 ## 기록 (최신이 맨 위)
 
+### 2026-11-10 · 커밋 (이 기록 커밋 하나) · 머리글로 옮기기, 오른쪽 빈칸 없앰, 1시간 24시, 최대 습도(서버 90 적용), 관측소 범례 두 줄
+- `forecast/ui.js`: 머리글 끌기로 옮기기, 1시간 표 자정 = 앞날 24시, 범례 '최대/습도'(c[11]). `forecast/style.css`: `.fc-scroll` relative·예보 지도 overflow hidden·습도 색. `app.js`·`index.html`: 관측소 범례 두 줄.
+- `supabase/migrations/20261110_90_forecast_grid_humidity.sql`: 사용자 "적용해" 후 적용(파일과 같은 내용). 확인: 8개 지사 142칸 모두 최고 습도(80~100%), 0.19초.
+- 시험: `tests/test_forecast_ui.py`(최대 습도 켜기·24시), `tests/_sb_mock.py`(격자 12번째 값).
+- 검토 결과(관측소 426곳 좌표 없음, 지도 거리 기준, 기상청 3시간 화면 시각 차이)는 decisions.md.
+— ✍ Claude Code 작성
+
 ### 2026-11-09 · 커밋 (이 기록 커밋 하나) · 세 창 배치 한 곳(layoutPanels): 한 창을 바꿔도 다른 창 그대로, 누르면 앞으로
 - `forecast/ui.js`: `layoutPanels`(기본 상태로 재서 공통 계수·기본 자리, 손댄 창은 그 값 그대로), `frontBox`, `resetBox` 는 그 창만, 끌기는 그 창만 바꿈. `applyBoxGeo` 삭제. `forecast/daily.js`: 배치를 `ForecastUI.layoutPanels` 로.
 - 시험 `tests/test_forecast_ui.py` `t_modal_isolation`(1280×680, 줄어든 상태에서 잡는 순간·일별 늘리기·원래대로·겹친 창 누르기).
