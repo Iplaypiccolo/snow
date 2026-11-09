@@ -7,6 +7,7 @@
 //  * 기상청이 가끔 응답이 늦거나 504(30초 시간 초과)를 줌: 정상 응답은 1초 안팎이라 15초 넘게 걸리면 끊고 1초 뒤 한 번 더.
 //    함수 한 번은 약 115초 안에 끝냄(무료 플랜 최대 150초). 못 받은 시각은 다음 예약(30분마다, 11:40까지) 때 그 시각만.
 //  * 기상청 키는 함수 비밀값 KMA_AUTH_KEY 에만. 키가 들어간 주소는 오류·기록에 남기지 않는다.
+//  * 관측소 위치(2026-11-10 사용자: 고속도로 근처 빠진 관측소 추가): 본문 {"stations":true,"date":"YYYYMMDD","hour":12} → 그 시각 글의 관측소 번호·이름·경도·위도만 돌려줌(저장 안 함, 기상청 1번)
 //  * 순수 로직은 Node 로 시험: tests/test_collect_snow.mjs
 // ============================================================
 export const SNOW_URL = 'https://apihub.kma.go.kr/api/typ01/url/kma_snow1.php';
@@ -32,6 +33,21 @@ export function parseSnow(text, tm) {
   return n ? out : null;
 }
 
+// 기상청 글 → 관측소 위치 [[번호, 이름, 경도, 위도], …] (값이 비었거나 결측이어도 위치는 씀). 줄이 없으면 null
+export function parseStations(text) {
+  if (typeof text !== 'string' || !text.includes('#START7777')) return null;
+  const seen = new Map();
+  for (const line of text.split(/\r?\n/)) {
+    if (!line || line[0] === '#') continue;
+    const p = line.split(',').map((s) => s.trim());
+    if (p.length < 6 || !/^\d{1,6}$/.test(p[1])) continue;
+    const lon = Number(p[3]), lat = Number(p[4]);
+    if (!Number.isFinite(lon) || !Number.isFinite(lat) || lon < 120 || lon > 135 || lat < 30 || lat > 45) continue;
+    if (!seen.has(p[1])) seen.set(p[1], [Number(p[1]), p[2], Math.round(lon * 1e5) / 1e5, Math.round(lat * 1e5) / 1e5]);
+  }
+  return seen.size ? [...seen.values()].sort((a, b) => a[0] - b[0]) : null;
+}
+
 async function allowed(req, deps) {
   const t = req.headers.get('x-collector-token');
   if (t) return { ok: await deps.store.tokenOk(t), admin: false };
@@ -53,6 +69,14 @@ export async function handle(req, deps) {
   const dry = body.dry === true;
   const key = String(deps.env('KMA_AUTH_KEY') || '').trim();
   if (!key) return json(200, { ok: false, error: 'no_key' });
+  if (body.stations === true) {                                      // 관측소 위치만(저장 안 함)
+    const h = Number.isInteger(body.hour) && body.hour >= 0 && body.hour <= 23 ? body.hour : 12;
+    if (!date) return json(400, { ok: false, error: 'date' });
+    const tm = date + String(h).padStart(2, '0') + '00';
+    const r = await deps.fetchText(`${SNOW_URL}?sd=day&tm=${tm}&help=0&authKey=${encodeURIComponent(key)}`);
+    const list = r.status === 200 ? parseStations(r.text) : null;
+    return json(200, { ok: !!list, tm, status: r.status, count: list ? list.length : 0, stations: list || [] });
+  }
 
   const { data: plan, error } = await deps.store.plan(date ? date.replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3') : null);
   if (error || !plan) return json(500, { ok: false, error: 'db' });

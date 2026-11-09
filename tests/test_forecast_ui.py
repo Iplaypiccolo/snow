@@ -942,16 +942,17 @@ def t_modal_isolation(b):
     J(p, f"SSOpenForecast('{d}')"); p.locator('.fc-detail tbody tr').first.click(); p.wait_for_selector('#fc-daily table'); p.wait_for_timeout(300)
     st = lambda: J(p, "['fc-pin','fc-tail','fc-daily'].map(id => { const b=document.getElementById(id), r=b.getBoundingClientRect(); return [Math.round(r.left),Math.round(r.top),Math.round(r.width),Math.round(r.height), b.querySelector('.fc-pin-in').style.zoom] })")
     s0 = st(); check(float(s0[0][4]) < 1.2, f'세 창이 지도에 맞게 줄어든 상태에서 시험 {s0}')
+    same = lambda a, b: a[4] == b[4] and all(abs(a[i] - b[i]) <= 1 for i in range(4))      # 배율은 똑같이, 위치·크기는 소수점 반올림 1px 까지
     def edge(box, side, dx):
         e = p.locator(box + ' .fc-pin-edge.' + side).bounding_box(); x, y = e['x'] + 5, e['y'] + e['height'] / 2
         p.mouse.move(x, y); p.mouse.down(); p.mouse.move(x - 1, y, steps=1); p.wait_for_timeout(50); mid = st(); p.mouse.move(x + dx, y + 10, steps=6); p.mouse.up(); p.wait_for_timeout(150); return mid
     mid = edge('#fc-daily', 'l', -120); s1 = st()
     check(mid[2][4] == s0[2][4] and abs(mid[2][2] - s0[2][2]) <= 2 and mid[2][3] == s0[2][3], f'잡는 순간 크기 그대로 {s0[2]} {mid[2]}')
-    check(s1[0] == s0[0] and s1[1] == s0[1], f'일별을 늘려도 다른 두 창 그대로 {s0} {s1}')
+    check(same(s1[0], s0[0]) and same(s1[1], s0[1]), f'일별을 늘려도 다른 두 창 그대로 {s0} {s1}')
     check(s1[2][4] == s0[2][4] and s1[2][3] == s0[2][3] and s1[2][2] >= s0[2][2] + 110, f'일별: 글자·높이 그대로 폭만 {s0[2]} {s1[2]}')
-    edge('#fc-pin', 'l', -150); s2 = st(); check(s2[1] == s1[1] and s2[2] == s1[2], '1시간을 늘려도 다른 창 그대로')
-    p.locator('#fc-tail .fc-reset').click(); p.wait_for_timeout(150); s3 = st(); check(s3[0] == s2[0] and s3[2] == s2[2], f"3시간 '원래대로'에 다른 창 그대로 {s2} {s3}")
-    p.locator('#fc-pin .fc-reset').click(); p.wait_for_timeout(150); s4 = st(); check(s4[0] == s0[0] and s4[2] == s3[2], "1시간 '원래대로' = 처음 그대로, 일별은 그대로")
+    edge('#fc-pin', 'l', -150); s2 = st(); check(same(s2[1], s1[1]) and same(s2[2], s1[2]), f'1시간을 늘려도 다른 창 그대로 {s1} {s2}')
+    p.locator('#fc-tail .fc-reset').click(); p.wait_for_timeout(150); s3 = st(); check(same(s3[0], s2[0]) and same(s3[2], s2[2]), f"3시간 '원래대로'에 다른 창 그대로 {s2} {s3}")
+    p.locator('#fc-pin .fc-reset').click(); p.wait_for_timeout(150); s4 = st(); check(same(s4[0], s0[0]) and same(s4[2], s3[2]), f"1시간 '원래대로' = 처음 그대로, 일별은 그대로 {s0} {s3} {s4}")
     th = p.locator('#fc-tail th.lb').first.bounding_box(); p.mouse.move(th['x'] + 20, th['y'] + 8); p.mouse.down(); p.mouse.move(th['x'] + 20, th['y'] - 120, steps=5); p.mouse.up(); p.wait_for_timeout(100)      # 3시간 창을 1시간 창 아래쪽에 겹치게
     zi = lambda: J(p, "['fc-pin','fc-tail','fc-daily'].map(id=>+document.getElementById(id).style.zIndex)")
     check(zi()[1] > zi()[0], '옮긴 3시간 창이 앞')

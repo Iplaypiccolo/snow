@@ -1,7 +1,7 @@
 /* 일 신적설 자동 수집 함수(supabase/functions/collect-snow/core.mjs) 자동 테스트 — 기상청 글 읽기, 가짜 DB 로 24시각 받기·남은 시각만·다시 받기·시간 제한·권한
    실행: node tests/test_collect_snow.mjs   (저장소 맨 위 폴더에서) */
 import assert from 'node:assert/strict';
-import { parseSnow, handle, SNOW_URL } from '../supabase/functions/collect-snow/core.mjs';
+import { parseSnow, parseStations, handle, SNOW_URL } from '../supabase/functions/collect-snow/core.mjs';
 
 const results = [];
 async function test(name, fn) { try { await fn(); results.push([name, true]); } catch (e) { results.push([name, false, String(e.message).split('\n')[0]]); } }
@@ -16,6 +16,13 @@ await test('기상청 글 읽기: 관측소별 값, 다른 시각 줄·형식 �
   assert.equal(parseSnow('{"result":{"status":401}}', '202601152300'), null);
   assert.equal(parseSnow(page('202601152300', []), '202601152300'), null);
   assert.equal(parseSnow(null, 'x'), null);
+});
+
+await test('관측소 위치 읽기(2026-11-10): 번호·이름·경도·위도, 값이 결측이어도 위치는 씀, 같은 관측소는 한 번', () => {
+  const t = page('202601151200', [[90, 1.5], [100, -99.9]]) + '202601151100,    90, x, 128.5, 38.2, 000-----, 1.0,=\n';
+  assert.deepEqual(parseStations(t), [[90, '속초', 128.56473, 38.25085], [100, '속초', 128.56473, 38.25085]]);
+  assert.equal(parseStations('{"result":{"status":401}}'), null);
+  assert.equal(parseStations(page('202601151200', [])), null);
 });
 
 function world(o = {}) {
@@ -36,6 +43,13 @@ function world(o = {}) {
   return w;
 }
 const call = (w, body = {}, h = { 'x-collector-token': 'tok' }) => handle(new Request('http://x/', { method: 'POST', headers: h, body: JSON.stringify(body) }), w.deps).then(async (r) => [r.status, await r.json()]);
+
+await test('관측소 위치만(2026-11-10): 기상청 1번, 저장·계획 조회 없음, 키 안 보임, 날짜 없으면 400, 권한 없으면 401', async () => {
+  const w = world({ plan: { date: '20260115', in_season: false, done: [] } }); const [st, b] = await call(w, { stations: true, date: '20260115' });
+  assert.equal(st, 200); assert.equal(b.ok, true); assert.equal(b.tm, '202601151200'); assert.equal(b.count, 2); assert.deepEqual(b.stations[0], [90, '속초', 128.56473, 38.25085]);
+  assert.equal(w.fetched.length, 1); assert.equal(w.puts.length, 0); assert.equal(w.fin.length, 0); assert.equal(w.planArg, undefined); assert.ok(!JSON.stringify(b).includes(w.key));
+  assert.equal((await call(w, { stations: true }))[0], 400); assert.equal((await call(w, { stations: true, date: '20260115' }, {}))[0], 401);
+});
 
 await test('예약 호출: 어제 00~23시 24번 받아 시각마다 넣고, 끝에 요약본 다시 만들기', async () => {
   const w = world(); const [st, b] = await call(w);

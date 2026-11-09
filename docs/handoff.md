@@ -44,6 +44,13 @@
 
 ## 기록 (최신이 맨 위)
 
+### 2026-11-10 · 커밋 (이 기록 커밋 하나) · 관측소 위치 받아 오기(collect-snow v12)·지도 지사별 거리·관측소 3곳 추가(SQL91)
+- `supabase/functions/collect-snow/core.mjs`: `parseStations`, 본문 stations:true(저장 없음). 배포 v12(배포본 = 파일). 시험 `tests/test_collect_snow.mjs` 2개 추가.
+- `app.js`: 관측소 점 색·말풍선을 지사별 거리로.
+- `forecast/ui.js`: 세 창 기본 배율을 소수 넷째 자리로, 측정의 소수점 흔들림(±1px)으로 배율이 바뀌지 않게 직전 값 유지(`S.fitF`). 시험은 위치·크기 1px 까지 허용·배율은 정확히 같게.
+- 사용자 "이전 버젼으로 다시 적용해" 후 `supabase/migrations/20261110_91_stations_add_three.sql` 적용(관측소 260→263, 지사-관측소 384→387, 적설 요약 다시 만듦 — 2025-26 요약에 새 3곳 값 확인). `data/stations.json`·`data/hierarchy.json` 같은 3곳 추가, 시험 표본(`tests/fixtures/snow_sample.json`) 파주·청송 시리즈 다시 계산, `tests/test_import_reference.mjs` 개수.
+— ✍ Claude Code 작성
+
 ### 2026-11-10 · 커밋 (이 기록 커밋 하나) · 머리글로 옮기기, 오른쪽 빈칸 없앰, 1시간 24시, 최대 습도(서버 90 적용), 관측소 범례 두 줄
 - `forecast/ui.js`: 머리글 끌기로 옮기기, 1시간 표 자정 = 앞날 24시, 범례 '최대/습도'(c[11]). `forecast/style.css`: `.fc-scroll` relative·예보 지도 overflow hidden·습도 색. `app.js`·`index.html`: 관측소 범례 두 줄.
 - `supabase/migrations/20261110_90_forecast_grid_humidity.sql`: 사용자 "적용해" 후 적용(파일과 같은 내용). 확인: 8개 지사 142칸 모두 최고 습도(80~100%), 0.19초.

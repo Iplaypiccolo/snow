@@ -212,6 +212,9 @@
       var used = 0; ps.forEach(function (p) { p.inner.style.zoom = PIN_DEFAULT * f; used += p.el.offsetHeight; });
       if (used <= room - 2) break; f *= Math.max(0.5, (room - 2 - overhead) / Math.max(1, used - overhead));
     }
+    f = Math.round(PIN_DEFAULT * f * 1e4) / 1e4 / PIN_DEFAULT;      // 배율은 소수 넷째 자리로
+    if (S.fitF && Math.abs(f - S.fitF) < 0.004) f = S.fitF; else S.fitF = f;      // 측정의 소수점 흔들림(±1px)으로 기본 배율이 바뀌지 않게 직전 값 유지
+    ps.forEach(function (p) { p.inner.style.zoom = PIN_DEFAULT * f; });
     var top = 10; ps.forEach(function (p) { p.top0 = top; top += p.el.offsetHeight + 8; });
     ps.forEach(function (p) {
       var g = p.geo;
@@ -259,13 +262,13 @@
     e.preventDefault();
     // 손대는 순간 지금 보이는 배율·자리를 그 창의 값으로(이후 다른 창 배치와 무관, 시작할 때 크기가 바뀌지 않게)
     var inner0 = box.querySelector('.fc-pin-in'), z0 = parseFloat(inner0 && inner0.style.zoom) || geo.scale || 1, iw0 = (w0 - PIN_PAD) / z0, mw = box.parentNode.clientWidth;
-    geo.user = true; geo.scale = z0; geo.x = x0; geo.y = y0;
+    z0 = Math.round(z0 * 1e4) / 1e4; geo.user = true; geo.scale = z0; geo.x = x0; geo.y = y0; if (inner0) inner0.style.zoom = z0;      // 나중에 다시 그릴 때와 똑같은 배율로
     function mv(ev) {
       var dx = ev.clientX - sx, dy = ev.clientY - sy;
       if (!grip) { movePinBox(box,geo,x0+dx,y0+dy,w0,r.height); return; }
       var bw = Math.min(mw, Math.max(0, left ? w0 - dx : w0 + dx));      // 바라는 창 폭(지도보다 넓지 않게)
       if (mode === 'w') { geo.w = Math.max(PIN_W_MIN, (bw - PIN_PAD) / z0); inner0.style.width = geo.w + 'px'; }      // 옆면: 배율 그대로 표 폭만
-      else { geo.scale = Math.max(PIN_MIN, (bw - PIN_PAD) / iw0); inner0.style.zoom = geo.scale; }      // 모서리: 폭 그대로 배율만
+      else { geo.scale = Math.round(Math.max(PIN_MIN, (bw - PIN_PAD) / iw0) * 1e4) / 1e4; inner0.style.zoom = geo.scale; }      // 모서리: 폭 그대로 배율만
       geo.x = left ? x0 + w0 - box.offsetWidth : x0;      // 왼쪽 손잡이: 오른쪽 끝 그대로
       placeUser(box, geo); geo.x = box.offsetLeft; geo.y = box.offsetTop; inner0._g = geoKey(geo);
     }

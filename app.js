@@ -102,9 +102,12 @@ function initApp(){
   function buildMarkers(){
   Object.keys(markerById).forEach(function(id){ map.removeLayer(markerById[id]); });      // 관할이 바뀌어 다시 만들 때 기존 마커 제거
   markerById = {}; allStationsFlat = []; seenStationIds = {};
+  // 2026-11-10 사용자: 같은 관측소라도 지사마다 노선까지 거리가 다름 → 지사별 거리를 모아 두고, 전체 보기 색은 가장 가까운 지사 노선 기준
+  var perBranch = {};
   HIERARCHY.hq.forEach(function(hq){
     hq.branches.forEach(function(br){
       br.stations.forEach(function(s){
+        (perBranch[s.id] = perBranch[s.id] || []).push({ hq: hq.name, branch: br.name, road: s.road, dist: s.dist_km });
         if(!seenStationIds[s.id]){ seenStationIds[s.id] = true; allStationsFlat.push(s); }
       });
     });
@@ -114,7 +117,9 @@ function initApp(){
   });
 
   allStationsFlat.forEach(function(s){
-    var baseColor = bandColor(s.dist_km);
+    var list = (perBranch[s.id] || []).slice().sort(function(a, b){ return a.dist - b.dist; });
+    var near = list.length ? list[0].dist : s.dist_km;
+    var baseColor = bandColor(near);
     var marker = L.circleMarker([s.lat, s.lon], {
       pane: 'stationsPane',
       radius:5, color:'#fff', weight:1,
@@ -124,8 +129,8 @@ function initApp(){
     var addrLine = s.addr ? ('<div>'+esc(s.addr)+'</div>') : '';
     var basePopup =
       '<b>'+esc(s.name)+'</b> <span style="color:#6b6455">(지점 '+esc(s.id)+')</span>'+addrLine+
-      '<div>최근접 노선: '+esc(s.road)+'</div>'+
-      '<div>거리: <span class="popup-dist">'+s.dist_km.toFixed(3)+' km</span></div>';
+      '<div style="margin-top:2px">지사별 관할 노선까지 거리</div>'+
+      list.map(function(x){ return '<div>· '+esc(x.branch)+' <span class="popup-dist">'+x.dist.toFixed(2)+' km</span> <span style="color:#6b6455">('+esc(x.road)+')</span></div>'; }).join('');
     marker.bindPopup(basePopup);
     marker.on('popupopen', function(){
       var date = document.getElementById('dateSelect').value;
@@ -164,14 +169,15 @@ function initApp(){
   }
 
   var GRAY_COLOR = '#c9c4b3';
-  function grayOutExcept(idList){
+  // colorById: 고른 지사(본부) 기준 거리 색. 없으면 전체 보기 색(가장 가까운 지사 노선)
+  function grayOutExcept(idList, colorById){
     var idSet = {};
     (idList||[]).forEach(function(id){ idSet[id] = true; });
     Object.keys(markerById).forEach(function(idStr){
       var id = Number(idStr);
       var m = markerById[id];
       var keepColor = (idList === null) || idSet[id];
-      m.setStyle({ fillColor: keepColor ? m._baseColor : GRAY_COLOR, fillOpacity: keepColor ? 0.9 : 0.45 });
+      m.setStyle({ fillColor: keepColor ? ((colorById && colorById[id]) || m._baseColor) : GRAY_COLOR, fillOpacity: keepColor ? 0.9 : 0.45 });
     });
     visibleStationIds = idList;
   }
@@ -198,7 +204,8 @@ function initApp(){
       var m = markerById[s.id];
       if(m){ m.setRadius(8); m.setStyle({weight:2}); }
     });
-    grayOutExcept((stationList||[]).map(function(s){return s.id;}));
+    var col = {}; (stationList||[]).forEach(function(s){ col[s.id] = bandColor(s.dist_km); });      // 그 지사 노선까지 거리
+    grayOutExcept((stationList||[]).map(function(s){return s.id;}), col);
     showSnowLabels(stationList);
   }
 
@@ -207,20 +214,22 @@ function initApp(){
     highlightLayer.clearLayers();
     var allIds = [];
     var allStationsForLabels = [];
+    var hqDist = {};      // 본부 안 지사 중 가장 가까운 관할 노선까지 거리
     hq.branches.forEach(function(br, idx){
       var color = NEON_PALETTE[idx % NEON_PALETTE.length];
       (br.routeSegments||[]).forEach(function(seg){
         var latlngs = seg.coords.map(function(c){return [c[1], c[0]];});
         L.polyline(latlngs, {color:color, weight:6, opacity:0.95}).addTo(highlightLayer);
       });
-      br.stations.forEach(function(s){ allIds.push(s.id); allStationsForLabels.push(s); });
+      br.stations.forEach(function(s){ allIds.push(s.id); allStationsForLabels.push(s); hqDist[s.id] = Math.min(hqDist[s.id] == null ? 1e9 : hqDist[s.id], s.dist_km); });
     });
     Object.keys(markerById).forEach(function(idStr){ markerById[idStr].setRadius(5); markerById[idStr].setStyle({weight:1}); });
     allIds.forEach(function(id){
       var m = markerById[id];
       if(m){ m.setRadius(8); m.setStyle({weight:2}); }
     });
-    grayOutExcept(allIds);
+    var col = {}; Object.keys(hqDist).forEach(function(id){ col[id] = bandColor(hqDist[id]); });
+    grayOutExcept(allIds, col);
     showSnowLabels(allStationsForLabels);
   }
 
