@@ -23,9 +23,9 @@
     if(!Number.isFinite(start)) return [];
     function insert(b){
       var key=slotEnd(Date.parse(b.first_at)),old=groups[key];
-      var rn=b.reh!=null?(b.reh_n||1):0;                    // 85: 습도는 시각 수로 가중 평균
-      if(!old){groups[key]=Object.assign({},b,{amount_kind:kind(b),rehSum:rn?b.reh*rn:0,rehN:rn});if(kind(b)!=='numeric')['snow','snow_hi','pcp','pcp_hi'].forEach(function(k){groups[key][k]=null;});return;}
-      old.rehSum+=rn?b.reh*rn:0;old.rehN+=rn;
+      // 86(2026-11-09 사용자): 3시간 칸 습도 = 그 칸 시각 중 최고
+      if(!old){groups[key]=Object.assign({},b,{amount_kind:kind(b)});if(kind(b)!=='numeric')['snow','snow_hi','pcp','pcp_hi'].forEach(function(k){groups[key][k]=null;});return;}
+      old.reh=maximum(old.reh,b.reh);old.reh_n=(old.reh_n||0)+(b.reh!=null?(b.reh_n||1):0);
       var ak=kind(old),bk=kind(b);
       old.amount_kind=ak===bk?ak:'mixed';
       ['snow_code','pcp_code'].forEach(function(k){old[k]=old[k]==null||b[k]==null?null:Math.max(old[k],b[k]);});
@@ -46,7 +46,6 @@
     });
     return Object.keys(groups).sort(function(a,b){return +a-+b;}).map(function(k){
       var b=groups[k];b.expected_hours=(Date.parse(b.last_at)-Date.parse(b.first_at))/H+1;
-      b.reh=b.rehN?b.rehSum/b.rehN:null;b.reh_n=b.rehN;delete b.rehSum;delete b.rehN;
       b.partial=b.hours<3 || b.hours<b.expected_hours;return b;
     }).filter(function(b){return b.snow!=null || b.pcp!=null || b.tmin!=null || b.pop!=null || b.snow_code!=null || b.pcp_code!=null;});
   }

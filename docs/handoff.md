@@ -44,6 +44,13 @@
 
 ## 기록 (최신이 맨 위)
 
+### 2026-11-09 · 커밋 (이 기록 커밋 하나) · 3시간 습도 최고값(SQL86), 1시간 표 초단기 노란색 없앰
+- 사용자 "습도값은 최고값으로 바꿔줘"·"적용해" 후 `supabase/migrations/20261109_86_forecast_humidity_max.sql` 적용(15:3x): `forecast_cell_detail` 3시간 칸 reh 평균 → 최고. `forecast/series.js`·`forecast/ui.js` 도 최고.
+- 1시간 표 앞 6시간 노란색 배경 제거(`forecast/style.css`). 시험은 같은 배경색인지 확인.
+- 확인: 14시 발표 습도 81시각 모두 수집(15:37, 11/13 00시까지). 날씨누리 3시간 화면은 습도·기온을 칸 시각 한 시점 값으로 보임(216칸 중 214·215), 확률은 한 시점 값 아님.
+- 남은 제안(사용자 답 대기): 일별 보강 수집 한 번 85→120초, 예약 10→5분(새 발표 SKY·습도를 15~20분 안에).
+— ✍ Claude Code 작성
+
 ### 2026-11-09 · 커밋 (이 기록 커밋 하나) · 습도(1시간·3시간 표), 창 20% 크게, 일별 14시 대조 (SQL85 승인 적용)
 - 사용자 "적용해" 후 `supabase/migrations/20261109_85_forecast_humidity.sql` 적용(15:00): 일별 보강 저장 종류에 REH, 수집 대상·값 검사, `private.fc_reh_cell`, `forecast_cell_detail` 의 upper/hourly_tail `h`·3시간 칸 `reh`·`reh_n`, `forecast_version` c 에 습도 저장 시각. `collect-daily-aux` v2 배포(REH 허용, 계획 한도 300). 되돌린 시험 OK.
 - 화면: `forecast/ui.js` 1시간 표 기온 아래 '습도 %'(앞 6시간 색칠 안 함), 3시간 표 맨 아래 평균 습도. `forecast/series.js` 가중 평균. 창 기본 배율 1.2, `forecast/daily.js` 배치가 폭(왼쪽 160px)도 맞추고 넘치면 한 번 더 줄임.

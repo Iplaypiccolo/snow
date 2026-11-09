@@ -117,7 +117,6 @@
   function cellPop(v) { return v == null ? '<td class="z">-</td>' : v === 0 ? '<td class="z">0</td>' : '<td class="v">' + pct(v) + '</td>'; }
   function cellNum(v, tc) { if (v == null) return '<td class="z">-</td>'; if (tc) return '<td class="v tr">' + rng(v, v + tc) + '</td>'; return v === 0 ? '<td class="z"></td>' : '<td class="v">' + num(v) + '</td>'; }      // tc = 그 칸의 '~1' 시각 수
   function cellHum(v) { return v == null ? '<td class="z">-</td>' : '<td class="v">' + Math.round(v) + '</td>'; }      // 85: 습도(%)
-  function avgOf(a) { var x = a.filter(function (v) { return v != null; }); return x.length ? x.reduce(function (m, v) { return m + v; }, 0) / x.length : null; }
   function cellTmp(v) { return v == null ? '<td class="z">-</td>' : '<td class="v' + (v < 0 ? ' neg' : '') + '">' + tmp(v) + '</td>'; }
   function forecastHeader(slots, hourly) {
     function date(x){return kstDateLabel(x);}
@@ -140,7 +139,7 @@
       var d = hourAt(start, i), part = function (k) { return (sr[k] || []).slice(i, Math.min(i + step, to)); };
       var prev = i > 0 ? hourAt(start, i - step) : null, newDay = d && (i === 0 || (prev && prev.getDate() !== d.getDate()));   // 날짜는 맨 처음 칸과 날짜가 바뀌는 칸에만
       head += '<th' + (i < vn ? ' class="vs"' : '') + '>' + (d ? p2(d.getHours()) : '') + (newDay ? '<small>' + kstDateLabel(d.toISOString()) + '</small>' : '') + '</th>';
-      rs += mark(cellNum(sumOf(part('s')), cntOf(part('sq'))), i); rp += mark(cellNum(sumOf(part('p')), cntOf(part('pq'))), i); rt += mark(cellTmp(minOf(part('t'))), i); if (hasPop) ro += mark(cellPop(maxOf(part('r'))), i); if (hasHum) rh += cellHum(avgOf(part('h')));      // 습도는 앞 6시간도 단기 값 → 초단기 색칠 안 함
+      rs += mark(cellNum(sumOf(part('s')), cntOf(part('sq'))), i); rp += mark(cellNum(sumOf(part('p')), cntOf(part('pq'))), i); rt += mark(cellTmp(minOf(part('t'))), i); if (hasPop) ro += mark(cellPop(maxOf(part('r'))), i); if (hasHum) rh += cellHum(maxOf(part('h')));      // 86: 묶을 때는 최고(1시간 표는 그 시각 값). 앞 6시간도 단기 값
     }
     var u = step === 1 ? '' : (step + '시간 '), slots=[];
     for(var j=from;j<to;j++){var stamp=new Date(Date.parse(start)+j*3600e3).toISOString();slots.push({first_at:stamp,last_at:stamp,vs:j<vn});}
@@ -220,7 +219,7 @@
     if(!bins.length)return '<p>표시할 예보 자료가 없습니다.</p>';
     var html='<div class="fc-scroll" tabindex="0" aria-label="3시간 예보 가로 스크롤"><table class="fc-tt fc-three"><thead>'+forecastHeader(bins,false)+'</thead><tbody>';
     var rows=[['신적설 cm','snow','snow_hi'],['강수 mm','pcp','pcp_hi'],['확률 %','pop'],['최저 ℃','tmin']];
-    if(bins.some(function(b){return b.reh!=null;}))rows.push(['습도 %','reh']);      // 85: 3시간 평균 습도
+    if(bins.some(function(b){return b.reh!=null;}))rows.push(['습도 %','reh']);      // 86: 3시간 중 최고 습도
     rows.forEach(function(row){
       html+='<tr><th class="lb">'+row[0]+'</th>'+bins.map(function(b){
         var qual=row[2]?window.ForecastSeries.qualitative(b,row[1]):null;

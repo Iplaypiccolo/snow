@@ -267,7 +267,9 @@ def t_blend_no_toggle(b):
     p.click(f"#fc-tree [data-fcbr='{br}']"); p.wait_for_timeout(800)
     t1 = p.locator(".fc-pin .fc-tt").first
     check(p.locator(".fc-pin .fc-tt").count() == 1 and t1.locator("thead tr").last.locator("th:not(.lb)").count() == 48, "48시간 한 줄 표")
-    check(t1.locator("thead th.vs").count() == 6 and t1.locator("td.vs").count() == 24, "앞 6시각 전부(적설·강수·확률·기온) 색칠, 다른 시간은 색칠하지 않음")
+    check(t1.locator("thead th.vs").count() == 6 and t1.locator("td.vs").count() == 24, "앞 6시각(적설·강수·확률·기온) 초단기 표시")
+    same = J(p, "(() => { const t=document.querySelector('.fc-pin .fc-tt'); const a=t.querySelector('td.vs'), b=t.querySelector('tbody tr td:not(.vs)'); return getComputedStyle(a).backgroundColor===getComputedStyle(b).backgroundColor; })()")
+    check(same, "2026-11-09: 초단기 칸도 다른 칸과 같은 색(노란색 없음)")
     sn = t1.locator("tbody tr").nth(0).locator("td.vs").all_inner_texts(); check(sn == ["1"] * 6, f"앞 6시간 신적설 = 단기 값 1: {sn}")
     cap = p.locator(".fc-pin").inner_text(); check("색칠한 칸" not in cap and "크기 조절" not in cap and p.locator("#fc-pin .fc-pin-note, #fc-pin .fc-tt-cap").count()==0, "모달 하단 설명 삭제")
 
