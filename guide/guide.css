@@ -14,7 +14,7 @@
 @keyframes sgFade{from{opacity:0}}
 .sg-shield{position:absolute;inset:0;}
 .sg-dim{position:absolute;inset:0;background:radial-gradient(120% 90% at 50% 40%,rgba(10,22,44,.62),rgba(2,6,14,.82));
-  -webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);opacity:0;transition:opacity .3s ease;pointer-events:none;}
+  opacity:0;transition:opacity .3s ease;pointer-events:none;}      /* 2026-11-11: 뒤 화면 흐림(backdrop-filter) 뺌 — 움직이는 효과와 겹치면 그래픽 가속 없는 PC·원격 화면에서 1초 12~28번만 그려짐(뺀 뒤 40~60번) */
 .sg-root.is-center .sg-dim{opacity:1;}
 
 /* ---- 메뉴를 비추는 빛 고리: 둘레 밖은 어둡게, 모서리 네 곳은 조준 표시 ---- */
@@ -33,8 +33,7 @@
 /* ---- 카드 ---- */
 .sg-card{position:absolute;width:min(430px,calc(100vw - 24px));border-radius:20px;isolation:isolate;
   background:radial-gradient(120% 90% at 0% 0%,rgba(56,189,248,.16),transparent 55%),radial-gradient(110% 100% at 100% 100%,rgba(167,139,250,.16),transparent 55%),var(--sg-glass);
-  box-shadow:0 30px 80px -10px rgba(0,0,0,.65),0 0 0 1px rgba(255,255,255,.04),inset 0 1px 0 rgba(255,255,255,.07);
-  -webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);}
+  box-shadow:0 30px 80px -10px rgba(0,0,0,.65),0 0 0 1px rgba(255,255,255,.04),inset 0 1px 0 rgba(255,255,255,.07);}      /* 카드 바탕이 94% 불투명이라 흐림은 거의 안 보여 뺌(2026-11-11) */
 .sg-card::before{content:"";position:absolute;inset:0;border-radius:inherit;padding:1px;pointer-events:none;z-index:-1;
   background:linear-gradient(135deg,rgba(94,231,255,.85),rgba(109,139,255,.35) 40%,rgba(180,140,255,.8));
   -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;}
