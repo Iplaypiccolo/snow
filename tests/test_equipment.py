@@ -1882,7 +1882,21 @@ def t_server_lock_and_confirm_all(b):
     check(p.locator("tr[data-b='B019']").locator("input:not([disabled]), select:not([disabled])").count() == 0, "다시 읽어 그 줄 비활성")
     p.close()
 
-SERVER_TESTS = [t_server_many_vehicles, t_server_equip_confirm, t_server_branch_save, t_server_warning, t_server_lock_and_confirm_all]
+def t_server_forecast_if_changed(b):
+    """2026-11-11: 10분마다 특보를 다시 읽을 때 예상 적설(지사 59줄)은 마지막 수정 시각만 확인하고, 바뀌었을 때만 전부 받음"""
+    m = Mock(); m.users["exchungju"]["profile"]["must_change"] = False
+    p = server_page(b, m, "exchungju"); tab(p, "branch")
+    full = lambda: sum(1 for s in m.bf_selects if s != "updated_at"); probe = lambda: sum(1 for s in m.bf_selects if s == "updated_at")
+    f0, p0 = full(), probe()
+    check(f0 >= 1 and ev(p, "S.fcStamp") == m.fc_issued, f"처음엔 전부 받고 마지막 수정 시각을 기억: {m.bf_selects} / {ev(p, 'S.fcStamp')}")
+    ev(p, "tickWarn(true)"); p.wait_for_timeout(300)
+    check(full() == f0 and probe() == p0 + 1, f"안 바뀌었으면 확인만: {m.bf_selects}")
+    b19 = next(x for x in m.branch_forecast if x["branch_id"] == "B019"); b19["max_snow_24h"] = 12.3; b19["updated_at"] = "2099-01-01T00:00:00+00:00"
+    ev(p, "tickWarn(true)"); p.wait_for_timeout(300)
+    check(full() == f0 + 1 and ev(p, "S.fc.B019.max_snow_24h") == 12.3 and ev(p, "S.fcStamp") == "2099-01-01T00:00:00+00:00", f"바뀌었으면 다시 받음: {m.bf_selects}")
+    p.close()
+
+SERVER_TESTS = [t_server_many_vehicles, t_server_equip_confirm, t_server_branch_save, t_server_warning, t_server_lock_and_confirm_all, t_server_forecast_if_changed]
 
 if __name__ == "__main__":
     only = sys.argv[1:]

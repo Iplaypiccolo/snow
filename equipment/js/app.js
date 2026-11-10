@@ -256,7 +256,10 @@ function warnCells(bid) {
   return `<td class="" data-wcell="${esc(bid)}">${warnBadge(bid)}</td><td class="wt" data-wfc="${esc(bid)}">${t(w.fc)}</td><td class="wt" data-wef="${esc(bid)}"><span class="wef">${t(w.ef, true)}</span></td>`;
 }
 const fmtBase = b => b && /^\d{12}$/.test(b) ? `${+b.slice(4, 6)}/${+b.slice(6, 8)} ${b.slice(8, 10)}:${b.slice(10, 12)}` : "-";
-async function loadWarn() { const [r, f] = await Promise.all([Api.warnings(), Api.forecast()]); if (r.ok) S.warn = r.status; if (f.ok) S.fc = Object.fromEntries(f.rows.map(x => [x.branch_id, x])); }
+async function loadWarn() {      // 2026-11-11: 예상 적설은 바뀌었을 때만 다시 받음(S.fcStamp = 받은 것의 마지막 수정 시각)
+  const [r, f] = await Promise.all([Api.warnings(), Api.forecast(S.fcStamp)]); if (r.ok) S.warn = r.status;
+  if (f.ok && !f.same) { S.fc = Object.fromEntries(f.rows.map(x => [x.branch_id, x])); S.fcStamp = f.stamp || null; }
+}
 /* ---------- 예상 적설 — 기상청 단기예보 24시간 신적설 합의 지사 최댓값(발표 후 12시간 안). 확정한 지사는 확정 순간 값 ---------- */
 function fcOf(bid) {      // { snow, pcp, pop, tmin, tmin_at, tmfc, start, end, nx, ny, pnx, pny, fixed, at, manual } 또는 { none } / null(예보 없음)
   const r = S.reqs[bid];

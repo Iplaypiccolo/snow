@@ -121,6 +121,7 @@ class Mock:
                 if pop > o["max_pop_24h"]: o["max_pop_24h"] = pop
                 o["max_pcp_hi"] = max(o["max_pcp_hi"], ph); o["max_snow_hi"] = max(o["max_snow_hi"], sh)
         self.branch_forecast = list(_best.values()); self.fc_calls = []; self.fc_series_calls = []
+        for o in self.branch_forecast: o["updated_at"] = self.fc_issued
         self.branches = [{"id": b, "name": d.replace("지사", ""), "hq_id": h} for _, d, b, h in names]
         self.hqs = [{"id": "H01", "name": "수도권", "sort": 1}, {"id": "H02", "name": "서울경기", "sort": 2}, {"id": "H03", "name": "강원", "sort": 3}, {"id": "H04", "name": "충북", "sort": 4}, {"id": "H07", "name": "광주전남", "sort": 7}]
         self.users["stranger"] = {"id": "id-stranger", "username": "stranger", "password": "Stranger#Pass-123", "profile": None}
@@ -278,7 +279,13 @@ class Mock:
                     i = r["body"]["dates"].index(d); out += [{"station_id": int(stn), "value": arr[i]} for stn, arr in r["body"]["st"].items() if arr[i] is not None]
                 return send(200, out)
             if tbl == "save_jurisdiction" and "/rpc/" in path: return self.save_rpc(u, body, send)
-            if tbl == "branch_forecast": return send(200, self.branch_forecast if self.usable(u) else [])
+            if tbl == "branch_forecast":                                                    # 2026-11-11: select=updated_at&order=…&limit=1 = 마지막 수정 시각만(장비 화면의 바뀌었나 확인)
+                sel = (q.get("select") or [""])[0]; self.bf_selects = getattr(self, "bf_selects", []) + [sel]
+                if not self.usable(u): return send(200, [])
+                if sel == "updated_at":
+                    ts = sorted((x.get("updated_at") for x in self.branch_forecast if x.get("updated_at")), reverse=True)
+                    return send(200, [{"updated_at": ts[0]}] if ts else [])
+                return send(200, self.branch_forecast)
             if tbl == "forecast_version" and "/rpc/" in path:                               # 83: 예보가 바뀌었는지(작은 조회)
                 if not self.usable(u): return send(401, {"message": "login"})
                 self.fc_version_calls = getattr(self, "fc_version_calls", 0) + 1

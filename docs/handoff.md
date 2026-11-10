@@ -44,6 +44,15 @@
 
 ## 기록 (최신이 맨 위)
 
+### 2026-11-11 · 커밋 (이 기록 커밋 하나) · 예보 결과 저장해 두기(SQL93)·장비 화면 예상 적설은 바뀌었을 때만
+- `supabase/migrations/20261111_93_forecast_cache.sql`(사용자 "적용해" 뒤 적용 — 저장 칸 생김·계산 함수는 화면에서 못 부름·로그인 없이는 안 됨 확인, 보안 점검 새 종류 없음): `forecast_grid`·`forecast_cell_detail`·`forecast_daily_cell` 계산은 `private.*_calc` 로 옮기고,
+  같은 이름 public 함수가 예보 표시(`private.fc_cache_ver`)가 같고 10분 안이면 `private.fc_cache` 에 저장한 것을 돌려줌(같은 칸 동시 계산은 잠금으로 한 번).
+  `forecast_version` c 에 초단기 마지막 완료 시각 추가. 되돌린 시험: 결과가 계산 함수와 같음(본부 지도·추이·1시간·일별, 다른 아이디도), 저장분 0.005초(계산 0.17~0.4초), 없는 격자·빈 지사·로그인 없음은 그대로 거절, 계산 함수·저장 칸은 화면에서 못 부름.
+  **앞으로 예보 계산을 고칠 때는 `private.*_calc` 를 고칠 것**(public 것은 저장만).
+- `equipment/js/api.js`·`app.js`: 10분마다 특보를 다시 읽을 때 `branch_forecast` 는 마지막 수정 시각(`updated_at`) 한 칸만 확인하고 바뀌었을 때만 59줄을 받음(`S.fcStamp`).
+- 시험: `tests/test_equipment.py` `t_server_forecast_if_changed`, `tests/_sb_mock.py` branch_forecast `select=updated_at`.
+— ✍ Claude Code 작성
+
 ### 2026-11-10 · 커밋 (이 기록 커밋 하나) · 특보구역 요청(지사·본부·기계화부 → 관리자 승인, SQL92)
 - `supabase/migrations/20261110_92_zone_requests.sql`: 사용자 "적용해" 후 적용(되돌린 시험: 요청·중복·빈 사유·남의 승인/취소 막기·승인 반영·자기 취소 모두 기대대로). 적용 뒤 표 권한 규칙 켜짐·허용 규칙 0(함수로만), 보안 점검에 새 종류 없음.
 - `equipment/js/app.js`·`api.js`·`css/style.css`: 모든 아이디에 [특보구역 관리], 관리자 아닌 아이디는 [~ 요청](사유 칸)·'요청 중'·[요청 취소], 관리자는 창 위 '처리를 기다리는 요청' [승인][반려], `window.SSOpenZones`. 샘플 모드도 같은 규칙.

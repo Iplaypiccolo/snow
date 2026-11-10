@@ -96,8 +96,13 @@ const Api = (() => {
     warnings() {
       return SSAuth.authed("/rest/v1/rpc/warning_status", { method: "POST", body: {} }).then(r => r.ok ? { ok: true, status: r.json } : fail(r, "특보를 불러오지 못했습니다.")).catch(NET);
     },
-    forecast() {         // 지사별 예상 적설(59줄)
-      return SSAuth.rest("branch_forecast?select=branch_id,issued_at,max_snow_24h,max_pcp_24h,max_snow_hi,max_pcp_hi,max_pop_24h,min_tmp,min_tmp_at,worst_nx,worst_ny,detail").then(r => r.ok ? { ok: true, rows: r.json } : fail(r, "예상 적설을 불러오지 못했습니다.")).catch(NET);
+    forecast(stamp) {         // 지사별 예상 적설(59줄)
+      // 2026-11-11: stamp = 앞서 받은 것의 마지막 수정 시각. 같으면 다시 받지 않음(마지막 수정 시각 한 칸만 확인, 약 0.1KB). 확인이 안 되면 예전처럼 전부 받음
+      const full = () => SSAuth.rest("branch_forecast?select=branch_id,issued_at,max_snow_24h,max_pcp_24h,max_snow_hi,max_pcp_hi,max_pop_24h,min_tmp,min_tmp_at,worst_nx,worst_ny,detail,updated_at")
+        .then(r => r.ok ? { ok: true, rows: r.json, stamp: (r.json || []).reduce((a, x) => x.updated_at && (!a || x.updated_at > a) ? x.updated_at : a, null) } : fail(r, "예상 적설을 불러오지 못했습니다.")).catch(NET);
+      if (!stamp) return full();
+      return SSAuth.rest("branch_forecast?select=updated_at&order=updated_at.desc.nullslast&limit=1")
+        .then(r => r.ok && Array.isArray(r.json) && r.json[0] && r.json[0].updated_at === stamp ? { ok: true, same: true } : full()).catch(full);
     },
     zoneData() {
       return Promise.all([SSAuth.authed("/rest/v1/rpc/branch_zone_list", { method: "POST", body: {} }), SSAuth.rest("branch_zone_overrides?select=branch_id,zone_code,include"),
