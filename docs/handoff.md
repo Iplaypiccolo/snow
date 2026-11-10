@@ -44,6 +44,13 @@
 
 ## 기록 (최신이 맨 위)
 
+### 2026-11-10 · 커밋 (이 기록 커밋 하나) · 특보구역 요청(지사·본부·기계화부 → 관리자 승인, SQL92)
+- `supabase/migrations/20261110_92_zone_requests.sql`: 사용자 "적용해" 후 적용(되돌린 시험: 요청·중복·빈 사유·남의 승인/취소 막기·승인 반영·자기 취소 모두 기대대로). 적용 뒤 표 권한 규칙 켜짐·허용 규칙 0(함수로만), 보안 점검에 새 종류 없음.
+- `equipment/js/app.js`·`api.js`·`css/style.css`: 모든 아이디에 [특보구역 관리], 관리자 아닌 아이디는 [~ 요청](사유 칸)·'요청 중'·[요청 취소], 관리자는 창 위 '처리를 기다리는 요청' [승인][반려], `window.SSOpenZones`. 샘플 모드도 같은 규칙.
+- `boot.js`: 관리자 로그인 알림창(`#zoneNotice`) → [지금 보기].
+- 시험: `tests/test_equipment.py` `t_zone_requests`(+ 예전 '관리자만' 확인 고침), `tests/test_jurisdiction_requests.py` `t_zone_request_notice`, `tests/_sb_mock.py` `zone_request_list`.
+— ✍ Claude Code 작성
+
 ### 2026-11-10 · 커밋 (이 기록 커밋 하나) · 관측소 위치 받아 오기(collect-snow v12)·지도 지사별 거리·관측소 3곳 추가(SQL91)
 - `supabase/functions/collect-snow/core.mjs`: `parseStations`, 본문 stations:true(저장 없음). 배포 v12(배포본 = 파일). 시험 `tests/test_collect_snow.mjs` 2개 추가.
 - `app.js`: 관측소 점 색·말풍선을 지사별 거리로.

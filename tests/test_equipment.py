@@ -561,7 +561,7 @@ def t_warning_auto_badge(p):
     bg = [ev(p, f"getComputedStyle(document.querySelector(\"td[data-wcell='{bid(p, n)}'] .wb\")).backgroundColor") for n in ("춘천", "양양", "대관령")]
     check(len(set(bg)) == 3, f"단계마다 다른 색: {bg}")
     as_user(p, "br2"); tab(p, "branch")
-    check(p.locator("#zoneMgr").count() == 0 and badge(p, "양양").count() == 1, "지사도 보지만 특보구역 관리는 관리자만")
+    check(p.locator("#zoneMgr").count() == 1 and badge(p, "양양").count() == 1, "2026-11-10: 지사도 특보구역 관리를 엶(요청용)")
 
 def t_zone_manager(p):
     """관리자: 특보구역 관리 창에서 지사 구역을 빼고 더하면 그 지사 대설 특보가 바로 바뀜(기록 남음)"""
@@ -581,7 +581,42 @@ def t_zone_manager(p):
     check("횡성" in wl and "주의보" in wl and "대관령" in wl and "04:00" in wl and "06:00" in wl, "강풍 탭: 구역·단계·발표·발효·이어진 지사: " + wl)
     p.click("#sheetClose"); tab(p, "log")
     check("특보구역" in p.locator("#panel-log").inner_text(), "수정 기록에 특보구역")
-    as_user(p, "hq-gw"); tab(p, "branch"); check(p.locator("#zoneMgr").count() == 0, "본부는 관리 버튼 없음")
+    as_user(p, "hq-gw"); tab(p, "branch"); check(p.locator("#zoneMgr").count() == 1, "2026-11-10: 본부도 특보구역 관리를 엶(요청용)")
+
+def t_zone_requests(p):
+    """2026-11-10: 관리자 아닌 아이디는 사유를 적어 더하기·빼기 요청(취소 가능), 관리자는 요청을 승인/반려. 처음 고르는 지사는 아이디마다"""
+    yy, cc = bid(p, "양양"), bid(p, "춘천")
+    as_user(p, "br2"); tab(p, "branch"); p.click("#zoneMgr"); p.wait_for_selector("#zlist h3")
+    check(p.input_value("#zbr") == yy, "지사 아이디: 자기 지사부터")
+    check(p.locator("#zlist [data-zset]").count() == 0 and p.locator("#zaddBtn").count() == 0 and p.locator("#zlist [data-zask]").count() > 0 and p.locator("#zaddAsk").count() == 1, "지사: 바로 바꾸는 단추 없이 요청 단추만")
+    first = p.locator("#zlist [data-zask]").first; code = first.get_attribute("data-zask"); check(first.inner_text() == "빼기 요청", first.inner_text())
+    first.click(); p.wait_for_selector("#zaskReason")
+    p.click("#zaskSend"); p.wait_for_timeout(150); check("사유" in toast(p), "사유 없이는 못 보냄: " + toast(p))
+    p.fill("#zaskReason", "고속도로가 지나지 않음"); p.click("#zaskSend"); p.wait_for_timeout(250)
+    check("요청했습니다" in toast(p) and "빼기 요청 중" in p.locator("#zlist").inner_text() and p.locator("#zlist [data-zcancel]").count() == 1, "빼기 요청 → 요청 중·요청 취소: " + toast(p))
+    p.click("#zlist [data-zcancel]"); p.wait_for_timeout(250)
+    check("취소했습니다" in toast(p) and "요청 중" not in p.locator("#zlist").inner_text(), "요청 취소")
+    p.locator(f"#zlist [data-zask='{code}']").click(); p.fill("#zaskReason", "안 지남"); p.click("#zaskSend"); p.wait_for_timeout(200)
+    p.select_option("#zadd", "L1022520"); p.click("#zaddAsk"); p.wait_for_selector("#zaskReason"); p.fill("#zaskReason", "산지 구간 포함"); p.click("#zaskSend"); p.wait_for_timeout(250)
+    check(p.locator("#zlist [data-zcancel]").count() == 2 and "더하기 요청 중" in p.locator("#zlist").inner_text(), "더하기 요청도: " + p.locator("#zlist").inner_text()[:200])
+    p.select_option("#zbr", cc); p.wait_for_timeout(100); check(p.locator("#zlist [data-zask]").count() > 0, "다른 지사도 보고 요청할 수 있음")
+    p.click("#sheetClose")
+    as_user(p, "hq-gw"); tab(p, "branch"); p.click("#zoneMgr"); p.wait_for_selector("#zlist h3")
+    check(p.input_value("#zbr") == ev(p, "S.order.find(b => b.hq_id === S.me.hq_id).id"), "본부 아이디: 자기 본부의 첫 지사부터")
+    p.click("#sheetClose")
+    as_user(p, "eq-sg"); tab(p, "branch")
+    if p.locator("#zoneMgr").count():
+        p.click("#zoneMgr"); p.wait_for_selector("#zlist h3"); check(p.input_value("#zbr") == ev(p, "S.order[0].id"), "기계화부 아이디: 첫 지사부터"); p.click("#sheetClose")
+    as_user(p, "admin1"); tab(p, "branch"); p.click("#zoneMgr"); p.wait_for_selector("#zlist h3")
+    reqs = p.locator("#zlist .zreqs li")
+    check(reqs.count() == 2 and "고속도로가 지나지 않음" not in p.locator("#zlist").inner_text() and "안 지남" in p.locator("#zlist").inner_text(), "관리자: 처리를 기다리는 요청 2건(취소한 것은 없음)")
+    before = badge(p, "양양").inner_text()
+    p.locator("#zlist .zreqs [data-zok]").first.click(); p.wait_for_timeout(300)
+    check("승인" in toast(p) and p.input_value("#zbr") == yy and p.locator("#zlist .zreqs li").count() == 1, "승인 → 그 지사 구역이 바뀜: " + toast(p))
+    check(code not in [x.get_attribute("data-zset") for x in p.locator("#zlist ul").first.locator("[data-zset]").all()], "빼기 요청한 구역이 빠짐")
+    p.locator("#zlist .zreqs [data-zno]").first.click(); p.wait_for_timeout(300)
+    check("반려" in toast(p) and p.locator("#zlist .zreqs").count() == 0, "반려 → 요청 목록 비움")
+    check("L1022520" not in [x.get_attribute("data-zset") for x in p.locator("#zlist ul").first.locator("[data-zset]").all()], "반려한 더하기는 안 들어감")
 
 def t_private_hq_hidden_in_branch_tab(p):
     """민자는 지사별 요청·편성에 나오지 않음('요청 있는 지사만'을 꺼도)"""
@@ -1754,7 +1789,7 @@ TESTS = [t_route_revisit_and_order, t_route_perm_admin_only, t_gw_team, t_branch
          t_unsaved_guard_on_user_switch, t_xss_text_is_escaped, t_no_driver_info_anywhere,
          t_typing_then_clicking_next_input_keeps_both, t_round_delete, t_pending_branches_shown_grey, t_ui_version_reload_once,
          t_route_kind_and_eta, t_equip_can_edit_eta, t_bulk_confirm_and_no_holdings, t_filters_fit_any_width, t_date_in_title, t_branch_header_stays_on_top,
-         t_warning_auto_badge, t_zone_manager, t_snow_forecast, t_private_hq_hidden_in_branch_tab]
+         t_warning_auto_badge, t_zone_manager, t_zone_requests, t_snow_forecast, t_private_hq_hidden_in_branch_tab]
 
 # ---------------------------------------------------------------- 서버 모드(가짜 Supabase, tests/_sb_mock.py) — 실제 로그인 권한·저장 함수 호출
 sys.path.insert(0, str(Path(__file__).resolve().parent))

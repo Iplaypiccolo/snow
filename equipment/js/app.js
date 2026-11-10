@@ -1136,7 +1136,7 @@ function renderBranch() {
   const myBlk = can("req.confirm") ? "right" : canAnyReq() ? "left" : "";
   $("branchCtl").innerHTML = r ? `<div class="tb-row"><span class="tb-label">보기</span>` + BVIEWS.map(([k, id, lab, tip]) => `<button type="button" class="chip" id="${id}" data-bv="${k}" aria-pressed="${S.bviews.has(k)}" title="${tip}">${lab}</button>`).join("") +
     `<span class="tb-right">${myBlk ? `<span class="my-blk"><i aria-hidden="true"></i>파란 표 = 내가 입력하는 표</span>` : ""}<span class="br-dirty" id="brDirty" role="status" hidden></span></span>` +
-    (S.me.role === "admin" ? `<button type="button" class="btn sm" id="zoneMgr">특보구역 관리</button>` : "") + `</div>` : "";
+    `<button type="button" class="btn sm" id="zoneMgr">특보구역 관리</button>` + `</div>` : "";      // 2026-11-10 사용자: 모든 아이디가 봄(관리자 아닌 아이디는 요청)
   if (!r) { $("branchTable").innerHTML = `<tbody><tr><td class="empty">기준일자가 없습니다.</td></tr></tbody>`; return; }
   if (S.reqsBad) { $("branchTable").classList.remove("fixcols"); $("branchTable").style.minWidth = ""; $("branchTable").innerHTML = reqsBadHtml(); return; }
   const conf = can("req.confirm");
@@ -1411,7 +1411,16 @@ async function openSheet(vid) {
   $("vhist").className = "";
   $("vhist").innerHTML = !r.ok ? esc(r.message) : r.rows.length ? `<ol class="vhist">${r.rows.map(x => `<li class="${x.date === S.date ? "on" : ""}"><b>${esc(fmtMD(x.date))}</b> ${esc(x.date.slice(0, 4))} · ${esc(x.stops.map((s, j) => bn(s) + (x.times && x.times[j] ? " " + x.times[j] : "")).join(" → "))}</li>`).join("")}</ol>` : "확정된 경로 기록이 없습니다.";
 }
-/* ---------- 특보구역 관리(관리자) — 지사마다 대설 특보를 볼 기상청 특보구역. 자동 목록은 관할 고속도로가 지나는 시·군에서 계산 ---------- */
+/* ---------- 특보구역 관리 — 지사마다 대설 특보를 볼 기상청 특보구역. 자동 목록은 관할 고속도로가 지나는 시·군에서 계산
+   2026-11-10 사용자: 모든 아이디가 모든 지사를 봄. 관리자만 바로 더하기·빼기, 나머지는 사유를 적어 [요청](마이그레이션 92) → 관리자가 승인/반려
+   처음 고르는 지사: 지사 아이디 = 자기 지사, 본부 = 자기 본부의 첫 지사, 기계화부·관리자 = 첫 지사 ---------- */
+function zoneFirst() {
+  const m = S.me || {};
+  if (m.role === "branch" && m.branch_id && S.brById[m.branch_id]) return m.branch_id;
+  if (m.role === "hq") { const b = S.order.find(x => x.hq_id === m.hq_id); if (b) return b.id; }
+  return S.order.length ? S.order[0].id : null;
+}
+const zAdmin = () => !!S.me && S.me.role === "admin";
 async function openZones(bid) {
   sheet.innerHTML = `<button type="button" class="sheet-close" id="sheetClose">닫기</button><h2 id="sheetTitle">특보구역 관리</h2>
     <label class="ctl">지사 <select class="ci" id="zbr">${S.order.map(b => `<option value="${b.id}">${esc((S.hqById[b.hq_id] || {}).name || "")} · ${esc(b.name)}</option>`).join("")}</select></label>
@@ -1419,10 +1428,28 @@ async function openZones(bid) {
   sheet.hidden = false; backdrop.hidden = false;
   if (!lastFocus) lastFocus = document.activeElement;
   $("sheetClose").focus(); $("sheetClose").onclick = closeSheet;
-  if (bid) $("zbr").value = bid;
-  const r = await Api.zoneData();
+  $("zbr").value = bid || zoneFirst() || "";
+  const [r, q] = await Promise.all([Api.zoneData(), Api.zoneReqs()]);
   if (!r.ok) { if ($("zlist")) $("zlist").textContent = r.message; return; }
-  S.zdata = r; renderZones(); renderWarnNow();
+  S.zdata = r; S.zreq = q.ok ? q.rows : []; S.zask = null; renderZones(); renderWarnNow();
+}
+async function reloadZones(msg) {
+  const [z, q] = await Promise.all([Api.zoneData(), Api.zoneReqs()]);
+  if (z.ok) S.zdata = z; if (q.ok) S.zreq = q.rows; S.zask = null; renderZones(); renderWarnNow();
+  if (msg) toast(msg);
+}
+// 관리자: 처리를 기다리는 요청 — 지사·구역·더하기/빼기·사유·요청한 아이디 [승인][반려]
+function zoneReqsHtml() {
+  const rows = S.zreq || []; if (!zAdmin() || !rows.length) return "";
+  return `<h3>처리를 기다리는 요청 ${rows.length}건</h3><ul class="zlist zreqs">${rows.map(q => `<li><span><b>${esc(bn(q.branch_id))}</b> · ${esc(zoneLabel(q.zone_code))} <span class="tag">${q.action === "add" ? "더하기" : "빼기"}</span>
+      <br><span class="muted">${esc(q.reason)} — ${esc(q.by || "")}</span></span>
+      <span class="zreq-btns"><button type="button" class="btn sm primary" data-zok="${q.id}">승인</button><button type="button" class="btn sm" data-zno="${q.id}">반려</button></span></li>`).join("")}</ul>`;
+}
+// 관리자 아닌 아이디: 요청 사유 적는 칸(누른 단추 아래)
+function zoneAskHtml(code, action) {
+  const k = S.zask; if (!k || k.code !== code || k.action !== action) return "";
+  return `<div class="zask"><input class="ci" id="zaskReason" maxlength="200" placeholder="사유(꼭 적어 주세요)" aria-label="${action === "add" ? "더하기" : "빼기"} 요청 사유">
+    <button type="button" class="btn sm primary" id="zaskSend">요청 보내기</button><button type="button" class="btn sm" id="zaskCancel">취소</button></div>`;
 }
 // 지금 서버에 받아 둔 특보 전체(전국, 지사와 이어지지 않은 섬 등 포함) — 종류별 탭(대설 맨 앞, 종류가 5개 이상이면 두 줄)
 // 탭 = 특보 이름 + 발표된 구역 수, 누르면 아래에 구역마다 단계·발표·발효 시각과 이어진 지사
@@ -1455,15 +1482,24 @@ function zoneLabel(code) {          // 시·도 · 구역 이름
 function renderZones() {
   const el = $("zlist"), d = S.zdata; if (!el || !d) return;
   if (!d.byCode) d.byCode = Object.fromEntries(d.zones.map(z => [z.zone_code, z]));
-  const bid = $("zbr").value, cur = d.list[bid] || [], has = new Set(cur.map(z => z[0]));
+  const bid = $("zbr").value, cur = d.list[bid] || [], has = new Set(cur.map(z => z[0])), adm = zAdmin();
+  const mine = c => (S.zreq || []).find(q => q.branch_id === bid && q.zone_code === c && (adm || q.mine));      // 이 지사·구역에 대기 중인 요청
+  const pend = c => { const q = mine(c); return q ? `<span class="tag req">${q.action === "add" ? "더하기" : "빼기"} 요청 중</span>` + (!adm && q.mine ? `<button type="button" class="btn sm" data-zcancel="${q.id}">요청 취소</button>` : "") : ""; };
+  const act = (c, action, label, inc) => mine(c) ? pend(c) : adm ? `<button type="button" class="btn sm" data-zset="${esc(c)}" data-zinc="${inc}">${label}</button>`
+    : `<button type="button" class="btn sm" data-zask="${esc(c)}" data-zact="${action}">${label} 요청</button>`;
   const out = d.overrides.filter(o => o.branch_id === bid && !o.include);
   const leaf = d.zones.filter(z => /1[34]$/.test(z.sp || "") && !has.has(z.zone_code)).map(z => [z.zone_code, zoneLabel(z.zone_code)]).sort((a, b) => a[1].localeCompare(b[1], "ko"));
   el.className = "";
-  el.innerHTML = `<h3>들어간 구역 ${cur.length}곳</h3>` + (cur.length ? `<ul class="zlist">${cur.map(z => `<li><span>${esc(zoneLabel(z[0]))}</span><span class="tag">${z[2] === "manual" ? "더함" : "자동"}</span>
-      <button type="button" class="btn sm" data-zset="${esc(z[0])}" data-zinc="${z[2] === "manual" ? "" : "0"}">빼기</button></li>`).join("")}</ul>` : `<p class="muted">없음 — 이 지사의 관할 고속도로가 없거나 모두 뺐습니다.</p>`) +
-    (out.length ? `<h3>뺀 구역</h3><ul class="zlist">${out.map(o => `<li><span>${esc(zoneLabel(o.zone_code))}</span><button type="button" class="btn sm" data-zset="${esc(o.zone_code)}" data-zinc="">되살리기</button></li>`).join("")}</ul>` : "") +
-    `<h3>구역 더하기</h3><div class="zadd"><select class="ci" id="zadd"><option value="">구역 고르기</option>${leaf.map(([c, n]) => `<option value="${esc(c)}">${esc(n)}</option>`).join("")}</select>
-      <button type="button" class="btn sm primary" id="zaddBtn">더하기</button></div>`;
+  const sel = $("zadd") ? $("zadd").value : "";
+  el.innerHTML = zoneReqsHtml() + (adm ? "" : `<p class="muted">더하기·빼기는 사유를 적어 관리자에게 요청합니다. 관리자가 승인하면 바뀝니다.</p>`) +
+    `<h3>들어간 구역 ${cur.length}곳</h3>` + (cur.length ? `<ul class="zlist">${cur.map(z => `<li><span>${esc(zoneLabel(z[0]))}</span><span class="tag">${z[2] === "manual" ? "더함" : "자동"}</span>
+      ${act(z[0], "remove", "빼기", z[2] === "manual" ? "" : "0")}${zoneAskHtml(z[0], "remove")}</li>`).join("")}</ul>` : `<p class="muted">없음 — 이 지사의 관할 고속도로가 없거나 모두 뺐습니다.</p>`) +
+    (out.length ? `<h3>뺀 구역</h3><ul class="zlist">${out.map(o => `<li><span>${esc(zoneLabel(o.zone_code))}</span>${act(o.zone_code, "add", "되살리기", "")}${zoneAskHtml(o.zone_code, "add")}</li>`).join("")}</ul>` : "") +
+    `<h3>구역 더하기</h3><div class="zadd"><select class="ci" id="zadd"><option value="">구역 고르기</option>${leaf.map(([c, n]) => `<option value="${esc(c)}"${c === sel ? " selected" : ""}>${esc(n)}${mine(c) ? " (요청 중)" : ""}</option>`).join("")}</select>
+      ${adm ? `<button type="button" class="btn sm primary" id="zaddBtn">더하기</button>` : `<button type="button" class="btn sm primary" id="zaddAsk">더하기 요청</button>`}</div>` +
+    (S.zask && S.zask.free ? zoneAskHtml(S.zask.code, "add") : "") +
+    (!adm ? `${(S.zreq || []).filter(q => q.mine && q.branch_id === bid && !has.has(q.zone_code) && !out.some(o => o.zone_code === q.zone_code)).map(q => `<p class="muted">${esc(zoneLabel(q.zone_code))} — 더하기 요청 중 <button type="button" class="btn sm" data-zcancel="${q.id}">요청 취소</button></p>`).join("")}` : "");
+  if (S.zask && $("zaskReason")) $("zaskReason").focus();
 }
 async function setZone(code, include) {   // include: true 더함 / false 자동에서 뺌 / null 손댄 것을 없앰(자동대로)
   const bid = $("zbr") && $("zbr").value; if (!bid || S.me.role !== "admin") return;
@@ -1473,6 +1509,26 @@ async function setZone(code, include) {   // include: true 더함 / false 자동
   const z = await Api.zoneData(); if (z.ok) { S.zdata = z; renderZones(); renderWarnNow(); }
   await Promise.all([loadWarn(), loadAudit()]); paintWarn(); renderLog(); if (!$("panel-move").hidden) renderDest(); toast(`${bn(bid)} 지사 특보구역을 바꿨습니다`);
 }
+async function sendZoneReq() {
+  const k = S.zask, bid = $("zbr") && $("zbr").value, reason = (($("zaskReason") || {}).value || "").trim();
+  if (!k || !bid) return;
+  if (!reason) { toast("사유를 적어 주세요", true); if ($("zaskReason")) $("zaskReason").focus(); return; }
+  if (S.preview) return toast("미리보기에서는 요청할 수 없습니다.", true);
+  const r = await Api.zoneReq(bid, k.code, k.action, reason);
+  if (!r.ok) return toast(r.message, true);
+  reloadZones(`${bn(bid)} 지사 ${zoneLabel(k.code)} ${k.action === "add" ? "더하기" : "빼기"}를 요청했습니다`);
+}
+async function resolveZoneReq(id, approve) {
+  if (!zAdmin()) return;
+  const q = (S.zreq || []).find(x => x.id === id);
+  const r = await Api.zoneReqResolve(id, approve);
+  if (!r.ok) return toast(r.message, true);
+  if (q && $("zbr")) $("zbr").value = q.branch_id;
+  await reloadZones(approve ? "요청을 승인해 특보구역을 바꿨습니다" : "요청을 반려했습니다");
+  if (approve) { await Promise.all([loadWarn(), loadAudit()]); paintWarn(); renderLog(); if (!$("panel-move").hidden) renderDest(); }
+}
+// 바깥 화면(로그인 알림창의 [지금 보기])이 부름: 지사별 요청·편성 탭에서 특보구역 관리 창을 엶
+window.SSOpenZones = (bid) => { if (!S.me) return false; openZones(bid || null); return true; };
 function closeSheet() { crewPick=null; sheet.classList.remove("wide", "crew-sheet"); sheet.hidden = true; backdrop.hidden = true; hideTip(); if (lastFocus) lastFocus.focus(); lastFocus = null;
   if (history.state && history.state.ssSheet) { try { history.back(); } catch (e) {} } }      // 창을 열 때 남긴 기록 한 칸을 지움(뒤로가기로 닫은 경우는 이미 지워짐)
 // 뒤로가기(2026-11-02 사용자 요청): 창(장비 상세·보고서 미리 보기 등)이 열리면 기록 한 칸 → 뒤로가기는 창만 닫음. 장비 화면만 따로 열었으면 이전 탭으로
@@ -1552,7 +1608,7 @@ document.addEventListener("change", async e => {
   if (t.id === "colsSelTeam") { if (!canTeam()) return refresh(); S.cols = Math.min(10, Math.max(2, +t.value)); await ensureRoutes(); return refresh(); }
   if (t.id === "colsSel") { if (!canRoute()) return refresh(); S.cols = Math.min(10, Math.max(2, +t.value)); await ensureRoutes(); return refresh(); }
   if (t.id === "logUser") { S.logUser = t.value; return renderLog(); }
-  if (t.id === "zbr") return renderZones();
+  if (t.id === "zbr") { S.zask = null; return renderZones(); }
   if (t.dataset.rv) {                       // 경로 칸(관리자): 그 (날짜, 장비)의 지사 목록을 다시 모음
     const vid = t.dataset.rv, d = t.dataset.rd, v = vehById(vid); if (!v || !(isTeam(v) ? canTeam() : canRoute())) return refresh();
     const rc = readCell(vid, d);
@@ -1671,6 +1727,12 @@ document.addEventListener("click", e => {
   if (c("#roundDel")) return deleteRound();
   if (c("#zoneMgr")) return openZones();
   if ((x = c("[data-zset]"))) return setZone(x.dataset.zset, x.dataset.zinc === "" ? null : x.dataset.zinc === "1");
+  if ((x = c("[data-zask]"))) { S.zask = { code: x.dataset.zask, action: x.dataset.zact }; return renderZones(); }
+  if (c("#zaddAsk")) { const v = ($("zadd") || {}).value; if (!v) return toast("요청할 구역을 고르세요", true); S.zask = { code: v, action: "add", free: true }; return renderZones(); }
+  if (c("#zaskCancel")) { S.zask = null; return renderZones(); }
+  if (c("#zaskSend")) return sendZoneReq();
+  if ((x = c("[data-zcancel]"))) return (async () => { const r = await Api.zoneReqCancel(+x.dataset.zcancel); if (!r.ok) return toast(r.message, true); reloadZones("요청을 취소했습니다"); })();
+  if ((x = c("[data-zok]")) || (x = c("[data-zno]"))) return resolveZoneReq(+(x.dataset.zok || x.dataset.zno), !!x.dataset.zok);
   if ((x = c("[data-fb]"))) return openForecast(x.dataset.fb);
   if ((x = c("[data-wtab]"))) { S.wtab = x.dataset.wtab; return renderWarnNow(); }
   if (c("#zaddBtn")) { const v = ($("zadd") || {}).value; return v ? setZone(v, true) : toast("더할 구역을 고르세요", true); }

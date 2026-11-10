@@ -97,7 +97,8 @@ class Mock:
         _ga = _json.load(open(_os.path.join(_os.path.dirname(__file__), "..", "data", "grid_assign.json"), encoding="utf-8"))
         _iss = (_dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
         self.fc_issued = _iss.isoformat(); self.fc_start = (_iss + _dt.timedelta(hours=2)).isoformat(); self.fc_end = (_iss + _dt.timedelta(hours=26)).isoformat()
-        self.fc_humidity = True   # 85: 격자 창 습도(단기 REH)
+        self.fc_humidity = True
+        self.zone_reqs = []      # 특보구역 요청(마이그레이션 92) [{id, branch_id, zone_code, zone_name, action, reason, by, created_at}]   # 85: 격자 창 습도(단기 REH)
         # 격자 = [nx, ny, 지사들, 적설, 강수, 최저기온, 최저 시각, 추이{s,p,t,r,vn,pq,sq}, 최고 강수확률, 강수 범위 위쪽, 적설 범위 위쪽] (마이그레이션 34·42·60·62)
         #  적설·강수는 정수(기상청 격자 값). 적설이 있고 강수 0 인 칸 = 12시 '~1mm'(pq), 강수가 있고 적설 0 인 칸 = 14시 '~1cm'(sq) → 범위 위쪽 +1
         def _cell(c):
@@ -326,6 +327,9 @@ class Mock:
                 (self.fc_series_calls if ser else self.fc_calls).append(sorted(ids))
                 return send(200, {"tmfc": self.fc_issued, "start_at": self.fc_start, "end_at": self.fc_end,
                                   "cells": [[nx, ny, [b for b in bs if b in ids], s, p, t, ta, sr if ser else None, pop, ph, sh, 60 + (nx + ny) % 41] for nx, ny, bs, s, p, t, ta, sr, pop, ph, sh in self.fc_cells if ids & set(bs)]})      # 마지막 = 24시간 최고 습도(90)
+            if tbl == "zone_request_list" and "/rpc/" in path:      # 특보구역 요청(마이그레이션 92): 관리자 = 대기 요청 전체, 그 밖 = 자기 것(시험에선 없음)
+                if not self.usable(u): return send(401, {"message": "login"})
+                return send(200, [dict(q, mine=False) for q in self.zone_reqs] if u["profile"].get("role") == "admin" else [])
             if tbl == "warning_status" and "/rpc/" in path:
                 self.eq_calls.append((tbl, body)); return send(200, self.warn_status) if self.usable(u) else send(401, {"message": "login"})
             if tbl in ("save_fleet", "save_requests") and "/rpc/" in path:

@@ -114,6 +114,16 @@ def t_admin_sees_notice_badge_and_panel(b):
     check("처리된 요청 1건" in p.locator("#jr-requests").inner_text(), "처리된 요청은 접어서 따로")
     check(p.locator("#jr-requests [data-ra=prep]").count() == 4 and p.locator("#jr-requests [data-ra=reject]").count() == 4 and p.locator("#jr-requests [data-ra=cancel]").count() == 0, "관리자 카드 버튼")
 
+def t_zone_request_notice(b):
+    """2026-11-10: 특보구역 요청이 있으면 관리자 로그인 때 알림창, [지금 보기] = 장비 지원 · 지사별 요청/편성(특보구역 관리 창), 같은 로그인에선 다시 안 뜸"""
+    m = SBM.Mock(); m.zone_reqs = [{"id": 7, "branch_id": CHUNGJU, "zone_code": "L1030100", "zone_name": "충주", "action": "add", "reason": "시험", "by": "충주지사", "created_at": "2026-11-10T01:00:00Z"}]
+    p = open_as(b, "admin-01", m, click_tab=False); p.wait_for_selector("#zoneNotice", timeout=15000)
+    n = p.locator("#zoneNotice").inner_text(); check("특보구역 요청이 있습니다" in n and "1건" in n and "충주 지사" in n and "더하기" in n, n)
+    p.click("#zoneNoticeGo"); p.wait_for_timeout(600)
+    check(p.locator("#zoneNotice").count() == 0 and p.evaluate("document.getElementById('shell').dataset.page") == "equip" and p.locator(".eq-btn[data-eqtab=branch]").get_attribute("class").find("active") >= 0, "지금 보기 → 장비 지원 · 지사별 요청/편성")
+    p.reload(); p.wait_for_timeout(2500); check(p.locator("#zoneNotice").count() == 0, "같은 로그인에서 이미 본 요청은 다시 안 뜸")
+    bp = open_as(b, "exok", mock_with_branch()); bp.wait_for_timeout(1500); check(bp.locator("#zoneNotice").count() == 0, "지사에게는 알림창 없음")
+
 def t_no_notice_when_nothing_pending(b):
     m = mock_with_branch(); m.add_request(CHUNGJU, CJ_SECS[:1], status="approved"); p = open_as(b, "admin-01", m, click_tab=False); p.wait_for_timeout(1500)
     check(p.locator("#jrNotice").count() == 0 and p.locator(".jr-badge").count() == 0, "대기 요청이 없으면 알림창·표시가 없어야 함")
@@ -209,7 +219,7 @@ def t_unassigned_gray_solid_everywhere(b):
     T.click_sec(p, ids[0]); p.select_option("#jr-dest", J(p, "JURIS.doc.branches[0].id")); p.click("#jr-move"); p.wait_for_timeout(300)
     d = J(p, f"JurisdictionUI._state().polys['{ids[0]}'].options.dashArray"); check(d and "," in d, "변경 대기는 점선")
 
-TESTS = [t_branch_requests_a_move, t_branch_request_without_destination_and_errors, t_equip_cannot_request, t_branch_cannot_use_admin_features, t_admin_sees_notice_badge_and_panel,
+TESTS = [t_zone_request_notice, t_branch_requests_a_move, t_branch_request_without_destination_and_errors, t_equip_cannot_request, t_branch_cannot_use_admin_features, t_admin_sees_notice_badge_and_panel,
          t_no_notice_when_nothing_pending, t_admin_prepares_move_and_save_approves, t_save_fails_whole_if_request_was_cancelled, t_admin_chooses_destination_rejects_and_already_owned, t_grid_tab_admin_only, t_unassigned_gray_solid_everywhere, t_unassigned_highly_visible]
 if __name__ == "__main__":
     with sync_playwright() as pw:

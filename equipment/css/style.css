@@ -1063,3 +1063,10 @@ table.fixcols th, table.fixcols td { overflow-wrap: anywhere; }
 #eqTable:not(.stack) .slot select.ci{min-width:5.2em;}
 .crew-cell{min-width:5.4em;text-align:center;}.crew-slot,.crew-code{display:block;width:100%;margin:2px 0;min-height:25px;line-height:23px;font-size:14px;}.crew-slot{border:1px solid var(--line,#d3dce5);border-radius:5px;background:var(--panel,#fff);color:inherit;cursor:pointer;}
 .sheet.crew-sheet{width:min(460px,calc(100vw - 24px));left:50%;right:auto;top:50%;bottom:auto;transform:translate(-50%,-50%);max-height:85vh;overflow:auto;box-sizing:border-box;}.crew-tabs{display:flex;gap:8px;margin:16px 0;}.crew-tabs button{flex:1;padding:9px;font-size:14px;border:1px solid #b9c8d7;border-radius:6px;background:transparent;color:inherit;cursor:pointer;}.crew-tabs button[aria-selected="true"]{background:#23415d;color:white;}.crew-options{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;}.crew-options label{display:flex;justify-content:center;align-items:center;gap:5px;min-height:40px;border:1px solid #d3dce5;border-radius:6px;font-size:15px;cursor:pointer;}.crew-options input{width:16px;height:16px;}.crew-options label:has(:disabled){opacity:.45;}.crew-selected{font-size:14px;}.crew-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px;}@media(max-width:600px){.crew-options{grid-template-columns:repeat(5,minmax(0,1fr));}}
+/* 특보구역 요청(2026-11-10): 관리자 아닌 아이디는 사유를 적어 요청, 관리자는 요청 목록에서 승인/반려 */
+.zlist li { flex-wrap: wrap; }
+.zlist .tag.req { background: #fff4d6; color: #8a5a00; border-color: #f0c96b; }
+.zask { flex-basis: 100%; display: flex; gap: 6px; align-items: center; padding: 4px 0 2px; }
+.zask .ci { flex: 1; min-width: 0; }
+.zreqs li { align-items: flex-start; }
+.zreq-btns { display: flex; gap: 4px; flex: none; }

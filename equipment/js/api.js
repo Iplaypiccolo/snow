@@ -36,6 +36,7 @@ const Api = (() => {
   const ALLOC_ERR = { "23514": "편성이 확정된 지사에만 배정할 수 있습니다.", "23503": "없는 기관·지사·기준일자입니다." };
   const VDEL_ERR = { "23503": "경로 기록이 있는 장비는 지울 수 없습니다. [숨기기]를 쓰세요." };
   const NET = () => ({ ok: false, message: (window.SSAuth && SSAuth.NET_MSG) || "서버에 연결할 수 없습니다." });
+  const zfail = (r, fallback) => { const m = r && r.json && r.json.message; return m && /[가-힣]/.test(m) ? { ok: false, message: m } : fail(r, fallback); };      // 서버가 한국어로 알려 준 까닭(중복 요청 등)
   const EQUIP_TABS = "vehicles,vehicle_routes,round_vehicle_status,round_requests,round_allocations,support_rounds,branch_zone_overrides,gw_team_routes,gw_team_status";
   const asVeh = x => ({ ...x, vehicle_id: x.team_id });          // 팀 경로·지원 여부를 장비 것과 같은 모양으로
 
@@ -102,6 +103,19 @@ const Api = (() => {
       return Promise.all([SSAuth.authed("/rest/v1/rpc/branch_zone_list", { method: "POST", body: {} }), SSAuth.rest("branch_zone_overrides?select=branch_id,zone_code,include"),
         SSAuth.rest("warning_zones?select=zone_code,name,sp,up_code&zone_code=like.L*&order=zone_code"), SSAuth.authed("/rest/v1/rpc/warning_active_list", { method: "POST", body: {} })])
         .then(([a, o, z, w]) => a.ok && o.ok && z.ok ? { ok: true, list: a.json || {}, overrides: o.json, zones: z.json, active: w.ok ? w.json : null } : fail(!a.ok ? a : !o.ok ? o : z, "특보구역을 불러오지 못했습니다.")).catch(NET);
+    },
+    // 특보구역 요청(마이그레이션 92): 관리자 아닌 아이디가 더하기·빼기를 요청, 관리자가 승인/반려. 서버 오류 글(한국어)을 그대로 보여 줌
+    zoneReqs() {
+      return SSAuth.authed("/rest/v1/rpc/zone_request_list", { method: "POST", body: {} }).then(r => r.ok ? { ok: true, rows: r.json || [] } : fail(r, "특보구역 요청을 불러오지 못했습니다.")).catch(NET);
+    },
+    zoneReq(branch, zone, action, reason) {
+      return SSAuth.authed("/rest/v1/rpc/zone_request_create", { method: "POST", body: { p_branch: branch, p_zone: zone, p_action: action, p_reason: reason } }).then(r => r.ok ? { ok: true } : zfail(r, "요청을 보내지 못했습니다.")).catch(NET);
+    },
+    zoneReqCancel(id) {
+      return SSAuth.authed("/rest/v1/rpc/zone_request_cancel", { method: "POST", body: { p_id: id } }).then(r => r.ok ? { ok: true } : zfail(r, "요청을 취소하지 못했습니다.")).catch(NET);
+    },
+    zoneReqResolve(id, approve) {
+      return SSAuth.authed("/rest/v1/rpc/zone_request_resolve", { method: "POST", body: { p_id: id, p_approve: !!approve } }).then(r => r.ok ? { ok: true } : zfail(r, "요청을 처리하지 못했습니다.")).catch(NET);
     },
     setZone(branch, zone, include) {       // include null = 손댄 것을 지움(자동대로)
       const q = `branch_zone_overrides?branch_id=eq.${encodeURIComponent(branch)}&zone_code=eq.${encodeURIComponent(zone)}`;
@@ -254,6 +268,38 @@ const Api = (() => {
         const rows = Object.entries(db.warnActive).map(([zone, v]) => { const [level, kind] = v.split(":"); return { zone, name: zname(zone), kind: kind || "대설", level, tm_fc: db.warnFc, tm_ef: level === "예비" ? db.warnEfPre : db.warnEf, branches: db.branches.filter(b => zonesOf(b.id).includes(zone)).map(b => b.id) }; })
           .sort((x, y) => RANK[y.level] - RANK[x.level] || x.kind.localeCompare(y.kind));
         return done({ ok: true, list, overrides: clone(db.zoneOver), zones: clone(db.zones), active: { state: { fetched_at: new Date().toISOString(), ok: true }, needed: true, all: true, rows } });
+      },
+      zoneReqs() {
+        if (!actor) return done({ ok: false, message: ERR["42501"] });
+        const me = actor.username || actor.label, rows = (db.zoneReq || []).filter(q => q.status === "pending" && (actor.role === "admin" || q.by_id === me))
+          .map(q => ({ id: q.id, branch_id: q.branch_id, zone_code: q.zone_code, zone_name: zname(q.zone_code), action: q.action, reason: q.reason, created_at: q.created_at, mine: q.by_id === me, by: q.by_id }));
+        return done({ ok: true, rows: clone(rows) });
+      },
+      zoneReq(branch, zone, action, reason) {
+        if (!actor) return done({ ok: false, message: ERR["42501"] });
+        if (actor.role === "admin") return done({ ok: false, message: "관리자는 요청 없이 바로 바꿉니다" });
+        reason = String(reason || "").trim(); if (!reason || reason.length > 200) return done({ ok: false, message: "사유를 1~200자로 적어 주세요" });
+        db.zoneReq = db.zoneReq || [];
+        if ((action === "add") === zonesOf(branch).includes(zone)) return done({ ok: false, message: action === "add" ? "이미 들어간 구역입니다" : "들어가 있지 않은 구역입니다" });
+        if (db.zoneReq.some(q => q.branch_id === branch && q.zone_code === zone && q.status === "pending")) return done({ ok: false, message: "이 지사·구역에 처리를 기다리는 요청이 이미 있습니다" });
+        const q = { id: db.zoneReq.length + 1, branch_id: branch, zone_code: zone, action, reason, status: "pending", by_id: actor.username || actor.label, created_at: new Date().toISOString() };
+        db.zoneReq.push(q); log("추가", "zone_requests", String(q.id), null, { branch_id: branch, zone_code: zone, action, reason });
+        return done({ ok: true });
+      },
+      zoneReqCancel(id) {
+        const q = (db.zoneReq || []).find(x => x.id === id && x.status === "pending" && x.by_id === (actor && (actor.username || actor.label)));
+        if (!q) return done({ ok: false, message: "취소할 수 있는 요청이 아닙니다" });
+        q.status = "cancelled"; return done({ ok: true });
+      },
+      zoneReqResolve(id, approve) {
+        if (!actor || actor.role !== "admin") return done({ ok: false, message: ERR["42501"] });
+        const q = (db.zoneReq || []).find(x => x.id === id && x.status === "pending"); if (!q) return done({ ok: false, message: "처리를 기다리는 요청이 아닙니다" });
+        if (approve) {
+          const i = db.zoneOver.findIndex(o => o.branch_id === q.branch_id && o.zone_code === q.zone_code), o = db.zoneOver[i], inn = zonesOf(q.branch_id).includes(q.zone_code);
+          if (q.action === "add" && !inn) { if (o && !o.include) db.zoneOver.splice(i, 1); else if (o) o.include = true; else db.zoneOver.push({ branch_id: q.branch_id, zone_code: q.zone_code, include: true }); }
+          if (q.action === "remove" && inn) { if (o && o.include) db.zoneOver.splice(i, 1); else if (o) o.include = false; else db.zoneOver.push({ branch_id: q.branch_id, zone_code: q.zone_code, include: false }); }
+        }
+        q.status = approve ? "approved" : "rejected"; return done({ ok: true });
       },
       setZone(branch, zone, include) {
         if (!actor || actor.role !== "admin") return done({ ok: false, message: ERR["42501"] });

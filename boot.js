@@ -66,6 +66,8 @@
           onOpen: function(){ var t = document.querySelector('.tab-btn[data-tab=jurisdiction]'); if (t) t.click(); setTimeout(function(){ if (window.JurisdictionUI) JurisdictionUI.openRequests(); }, 350); },
           onList: function(){ if (window.JurisdictionUI && window.JurisdictionUI._state().inited) JurisdictionUI.refreshRequests(); }
         }); }
+      // 특보구역 요청(2026-11-10 사용자, 마이그레이션 92): 관리자가 로그인하면 처리를 기다리는 요청 알림창 → [지금 보기] = 장비 지원 · 지사별 요청/편성의 특보구역 관리 창
+      zoneNotice();
       if (canGrid) {
         document.getElementById('tabGridBtn').style.display = '';                       // 예보 격자 편입: grid.edit 권한 계정에만 탭을 보여 줌
         if(window.GridUI){ GridUI.init(); }
@@ -82,6 +84,39 @@
     box.textContent = '자료를 불러오지 못했습니다. 새로고침(F5)해 보세요. 계속되면 관리자에게 알려 주세요. (' + (err && err.message || err) + ')';
     document.body.innerHTML = ''; document.body.appendChild(box);
   });
+  }
+  function zoneNotice(){
+    if (!window.SSAuth || !SSAuth.authed) return;
+    SSAuth.authed('/rest/v1/rpc/zone_request_list', { method: 'POST', body: {} }).then(function(r){
+      var rows = r && r.ok && Array.isArray(r.json) ? r.json.filter(function(q){ return !q.mine; }) : [];      // 관리자만 남의 요청을 받음
+      if (!rows.length) return;
+      var top = rows.reduce(function(m, q){ return Math.max(m, q.id); }, 0), seen = 0;
+      try { seen = parseInt(sessionStorage.getItem('ss_zone_seen') || '0', 10) || 0; } catch(e){}
+      if (top <= seen) return;                                                        // 같은 로그인에서 이미 본 요청은 다시 안 띄움
+      try { sessionStorage.setItem('ss_zone_seen', String(top)); } catch(e){}
+      var names = {}; ((window.JURIS && window.JURIS.doc && window.JURIS.doc.branches) || []).forEach(function(b){ names[b.id] = b.name; });
+      var esc = function(t){ return String(t == null ? '' : t).replace(/[&<>"']/g, function(c){ return '&#' + c.charCodeAt(0) + ';'; }); };
+      var old = document.getElementById('zoneNotice'); if (old) old.remove();
+      var m = document.createElement('div'); m.id = 'zoneNotice'; m.className = 'jr-notice'; m.setAttribute('role', 'alertdialog'); m.setAttribute('aria-modal', 'true'); m.setAttribute('aria-labelledby', 'zoneNoticeT');
+      m.innerHTML = '<div class="jr-notice-card"><div class="jr-notice-ico" aria-hidden="true">🔔</div><h3 id="zoneNoticeT">특보구역 요청이 있습니다</h3>' +
+        '<p>처리를 기다리는 요청이 <b>' + rows.length + '건</b> 있습니다.</p><ul>' + rows.slice(0, 8).map(function(q){
+          return '<li><b>' + esc((names[q.branch_id] || q.branch_id) + ' 지사') + '</b> ' + esc(q.zone_name) + ' ' + (q.action === 'add' ? '더하기' : '빼기') + '</li>'; }).join('') +
+        (rows.length > 8 ? '<li>… 외 ' + (rows.length - 8) + '건</li>' : '') + '</ul>' +
+        '<div class="jr-notice-btns"><button type="button" class="jr-btn jr-primary" id="zoneNoticeGo">지금 보기</button><button type="button" class="jr-btn" id="zoneNoticeLater">나중에</button></div></div>';
+      document.body.appendChild(m);
+      var close = function(){ var x = document.getElementById('zoneNotice'); if (x) x.remove(); };
+      document.getElementById('zoneNoticeGo').focus();
+      document.getElementById('zoneNoticeLater').onclick = close;
+      m.addEventListener('keydown', function(e){ if (e.key === 'Escape') close(); });
+      document.getElementById('zoneNoticeGo').onclick = function(){
+        close();
+        var b = document.querySelector('.eq-btn[data-eqtab=branch]'); if (b) b.click();            // 장비 지원 · 지사별 요청/편성
+        var frame = document.getElementById('equipFrame'), tries = 0, bid = rows[0].branch_id;
+        (function wait(){ var w = null; try { w = frame.contentWindow; } catch(e){}
+          if (w && w.SSOpenZones && w.SSOpenZones(bid)) return;                             // 안쪽 화면이 준비되면 특보구역 관리 창을 엶
+          if (++tries < 80) setTimeout(wait, 250); })();
+      };
+    }).catch(function(){});
   }
   // 로그인 뒤 첫 화면 = 장비 지원(2026-11-03 사용자 요청, index.html 의 data-first). 장비 지원을 먼저 보여 주고 강설량 측정 자료는 뒤에서 읽음. #fc= 로 열린 예보 창은 예외
   function bootFirst(profile){
