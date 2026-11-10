@@ -1335,10 +1335,8 @@ function renderAlloc() {
     `<td data-asum="truck">${cmp(sum(b.id, "truck"), +rbase(b.id, "assigned_truck") || 0)}</td><td data-asum="blower">${cmp(sum(b.id, "blower"), +rbase(b.id, "assigned_blower") || 0)}</td></tr>`).join("");
   const tot = f => rows.reduce((n, b) => n + sum(b.id, f), 0), want = f => rows.reduce((n, b) => n + (isFixed(b.id) ? +rbase(b.id, f) || 0 : 0), 0);
   const avc = (o, f, t) => { const got = osum(o, f), av = o === POOL ? poolCap : availN(o, t); return `<td${o === POOL ? ' class="al-pool" data-apool="av"' : ""}><span class="${got > av ? "al-over" : ""}" title="배정 ${got}대 / ${o === POOL ? "확정된 타지사 지원 가능" : "지원 가능"} ${av}대">${got} / ${av}</span></td>`; };
-  const done = (o, span) => { const a = orgAllocSummary(o); return `<td${span ? ' colspan="2"' : ' class="al-pool"'} data-adone="${esc(o)}">${a.total ? `${a.done} / ${a.total} ` + (a.over ? '<span class="tag warn">배정 초과</span>' : a.done === a.total ? '<span class="status go">완료</span>' : "") : '<span class="muted">-</span>'}</td>`; };
   const foot = `<tfoot><tr class="al-sum"><th class="l">배정 합계</th>${S.orgs.map(o => `<td>${osum(o, "truck")}</td><td>${osum(o, "blower")}</td>`).join("")}<td class="al-pool">${osum(POOL, "truck")}</td><td>${cmp(tot("truck"), want("assigned_truck"))}</td><td>${cmp(tot("blower"), want("assigned_blower"))}</td></tr>` +
-    `<tr class="al-av"><th class="l">배정 / 지원 가능</th>${S.orgs.map(o => avc(o, "truck", "제설차") + avc(o, "blower", "제설기")).join("")}${avc(POOL, "truck", "제설차")}<td></td><td></td></tr>` +
-    `<tr class="al-done"><th class="l" title="기계화부 장비는 기계화부가, 지역본부 장비는 관리자가 지원일 1의 지사를 정한 대수">장비 지정</th>${S.orgs.map(o => done(o, true)).join("")}${done(POOL, false)}<td></td><td></td></tr></tfoot>`;
+    `<tr class="al-av"><th class="l">배정 / 지원 가능</th>${S.orgs.map(o => avc(o, "truck", "제설차") + avc(o, "blower", "제설기")).join("")}${avc(POOL, "truck", "제설차")}<td></td><td></td></tr></tfoot>`;      // 2026-11-11 사용자: 아래 '장비 지정' 줄은 뺌(관리자만 보고 숫자도 헷갈림)
   $("allocTable").innerHTML = head + `<tbody>${body}</tbody>` + foot;
   const alCols = (isPhoneW() ? [7.7, ...S.orgs.flatMap(() => [4.3, 4.3]), 5, 5, 5] : [8.6, ...S.orgs.flatMap(() => [4.9, 4.9]), 4.9, 5.6, 5.6]).map(em);
   fixCols($("allocTable"), alCols, true); fitPanel($("allocTable"));

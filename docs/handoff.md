@@ -44,6 +44,12 @@
 
 ## 기록 (최신이 맨 위)
 
+### 2026-11-11 · 커밋 (이 기록 커밋 하나) · 기관별 배치 '장비 지정' 줄 뺌
+- `equipment/js/app.js` `renderAlloc`: 표 아래 '장비 지정' 줄(`tr.al-done`, `data-adone`) 삭제. 계산(`orgAllocSummary`)은 기관별 장비 카드·'배정 초과' 표지에서 그대로 씀.
+- `guide/guide.js`: 기관별 배치 안내의 '장비 지정' 단계 삭제.
+- 시험: `tests/test_equipment.py` `t_allocation`·`t_pool_vehicles` 를 줄 없음 확인·`orgAllocSummary` 값 확인으로.
+— ✍ Claude Code 작성
+
 ### 2026-11-11 · 커밋 (이 기록 커밋 하나) · 예보 결과 저장해 두기(SQL93)·장비 화면 예상 적설은 바뀌었을 때만
 - `supabase/migrations/20261111_93_forecast_cache.sql`(사용자 "적용해" 뒤 적용 — 저장 칸 생김·계산 함수는 화면에서 못 부름·로그인 없이는 안 됨 확인, 보안 점검 새 종류 없음): `forecast_grid`·`forecast_cell_detail`·`forecast_daily_cell` 계산은 `private.*_calc` 로 옮기고,
   같은 이름 public 함수가 예보 표시(`private.fc_cache_ver`)가 같고 10분 안이면 `private.fc_cache` 에 저장한 것을 돌려줌(같은 칸 동시 계산은 잠금으로 한 번).

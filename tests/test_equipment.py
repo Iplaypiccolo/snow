@@ -871,7 +871,7 @@ def t_allocation(p):
     check("4칸" in p.locator("#save-alloc .save-state").inner_text(), p.locator("#save-alloc .save-state").inner_text())
     p.click("#save-alloc [data-save]"); p.wait_for_timeout(300)
     check("기관별 배치을 확정했습니다" in toast(p) and ev(p, "S.alloc.size") == 4 and ev(p, "S.adraft.size") == 0, toast(p))
-    check(p.locator("#allocTable [data-adone='서울경기']").inner_text().startswith("8 / 8") and "배정 초과" in p.locator("#allocTable [data-adone='서울경기']").inner_text(), "장비 지정 현황: 서울경기 8/8 이지만 대관령 제설차 3대(배정 2)라 초과: " + p.locator("#allocTable [data-adone='서울경기']").inner_text())
+    check(p.locator("#allocTable [data-adone], #allocTable tr.al-done").count() == 0 and "장비 지정" not in p.locator("#allocTable").inner_text(), "2026-11-11: 기관별 배치 아래 '장비 지정' 줄은 없음")
     # ② 관리자의 기관별 장비: 기관 카드에 배정 요약, 넘긴 칸에 '배정 초과'(지우지 않음)
     tab(p, "fleet")
     check(p.locator("#fleetMore, #orgGrid .al-org").count() == 0, "기관별 지정 현황(표 아래 접는 칸)은 없음(2026-11-04)")
@@ -911,9 +911,9 @@ def t_allocation(p):
     tab(p, "fleet"); check(p.locator(f"select[data-fk='ra:{d0}:V017'] option").nth(1).inner_text() == "대관령 (2/2)" and p.locator(f"select[data-fk='ra:{d0}:V001']").count() == 0, "충북은 충북 장비만, 충북 배정 지사만")
     # ⑤ 관리자: 배정을 줄여도 경로는 그대로(초과 표시), 지정 현황 확인
     as_user(p, "admin1"); tab(p, "alloc")
-    check(p.locator("#allocTable [data-adone='서울경기']").inner_text().startswith("8 / 8") and "완료" in p.locator("#allocTable [data-adone='서울경기']").inner_text(), p.locator("#allocTable [data-adone='서울경기']").inner_text())
+    sa = ev(p, "orgAllocSummary('서울경기')"); check(sa["done"] == 8 and sa["total"] == 8 and not sa["over"], f"지정 현황(기관별 장비 카드와 같은 계산): {sa}")
     p.fill(al("서울경기", yy, "truck"), "1"); p.dispatch_event(al("서울경기", yy, "truck"), "change"); p.click("#save-alloc [data-save]"); p.wait_for_timeout(300)
-    check(route(p, "V006", d0) == ["양양"] and route(p, "V007", d0) == ["양양"] and "배정 초과" in p.locator("#allocTable [data-adone='서울경기']").inner_text(), "배정을 줄여도 경로는 남고 '배정 초과'로 표시")
+    check(route(p, "V006", d0) == ["양양"] and route(p, "V007", d0) == ["양양"] and ev(p, "orgAllocSummary('서울경기').over"), "배정을 줄여도 경로는 남고 '배정 초과'로 봄")
     tab(p, "log"); check("기관별 배치" in p.locator("#logTable").inner_text() and "서울경기 → 양양" in p.locator("#logTable").inner_text(), "수정 기록에 배정 변경")
 
 def t_reload(p):
@@ -1024,7 +1024,7 @@ def t_pool_vehicles(p):
     tab(p, "alloc"); key = f"지역본부|{dg}"
     check("지역본부" in p.locator("#allocTable thead").inner_text() and p.locator(f"[data-al='{key}'][data-f=truck]").count() == 1 and p.locator(f"[data-al='{key}'][data-f=blower]").count() == 0, "지역본부는 제설차 칸만")
     setnum(f"[data-al='{key}'][data-f=truck]", 1); p.click("#save-alloc [data-save]"); p.wait_for_timeout(300); check("확정했습니다" in toast(p), toast(p))
-    check(p.locator("#allocTable [data-apool=av]").inner_text().strip() == "1 / 5" and p.locator("#allocTable [data-adone='지역본부']").inner_text().startswith("1 / 1") and "완료" in p.locator("#allocTable [data-adone='지역본부']").inner_text(), "배정 1 / 지원 가능 5, 장비 지정 1 / 1")
+    check(p.locator("#allocTable [data-apool=av]").inner_text().strip() == "1 / 5", "배정 1 / 지원 가능 5")
     check(ev(p, f"Api.saveAllocations(S.round, [{{ org: '지역본부', branch_id: '{dg}', truck: 1, blower: 1 }}]).then(r => r.code)") == "23514", "서버: 지역본부 제설기 배정 거절")
     tab(p, "fleet"); cell = lambda v: f"#eqTable td[data-cell='{d0}|{v}']"
     pa = ev(p, "orgAllocSummary('지역본부')"); check(p.locator(cell(v1) + " .al-flag").count() == 0 and not pa["over"] and pa["done"] == pa["total"], f"배정 안이면 표지 없음: {pa}")
