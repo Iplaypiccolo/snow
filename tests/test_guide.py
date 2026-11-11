@@ -294,7 +294,36 @@ def t_back_button_tabs(b, ctx, m):
     p.go_back(); p.wait_for_timeout(500); check(st()[0] == "snow" and st()[1] == "forecast" and p.locator("body.authed").count() == 1, f"뒤로 → 첫 탭(사이트 그대로): {st()}")
     p.go_forward(); p.wait_for_timeout(500); check(st()[1] == "map", f"앞으로 → 관측소 지도: {st()}")
 
-TESTS = [t_help_and_who, t_first_login_admin, t_stop_and_keys, t_role_tabs, t_tab_intro_role_only, t_element_steps, t_demo_steps, t_mobile_reload, t_no_auto_in_automation, t_phone, t_phone_short, t_back_button_tabs]
+def t_sheet_in_frame(b, ctx, m):
+    """2026-11-11 사용자 제보: 기관별 장비에서 운전원을 고르면 지사별 요청·편성으로 넘어감.
+    원인 = 첫 화면 안(iframe)의 창이 따로 뒤로가기 기록을 남겨, 기록 순서가 섞이면 창을 닫을 때 바깥 화면이 한 칸 뒤로 감.
+    고침 = 창 기록은 바깥 화면이 남기고 지움. 창을 열고 닫아도 탭은 그대로, 뒤로가기는 창만 닫거나 바로 이전 탭으로"""
+    p = open_site(ctx, m, auto=False); login(p, "admin-01"); p.wait_for_timeout(800)
+    p.click(".page-btn[data-page=equip]"); p.wait_for_timeout(2500)
+    fr = [x for x in p.frames if "equipment" in x.url][0]
+    tab = lambda: (p.evaluate("(document.querySelector('.eq-btn.active') || {dataset:{}}).dataset.eqtab"), fr.evaluate("(document.querySelector('.tab[aria-selected=true]') || {dataset:{}}).dataset.tab"))
+    open_ = lambda: fr.evaluate("!document.getElementById('sheet').hidden")
+    p.click(".eq-btn[data-eqtab=branch]"); p.wait_for_timeout(800)
+    p.click(".eq-btn[data-eqtab=fleet]"); p.wait_for_timeout(1000)
+    vid = fr.evaluate("document.querySelector('[data-crew]').dataset.crew")
+    fr.locator(f'[data-crew="{vid}"]').first.click(); p.wait_for_timeout(300)
+    fr.locator('[data-crewcode="a"]').check(); p.wait_for_timeout(300)
+    check(open_() and tab() == ("fleet", "fleet"), f"운전원 1명 고름: 창 그대로, 탭 그대로 {tab()}")
+    fr.locator("[data-crewapply]").click(); p.wait_for_timeout(800)
+    check(not open_() and tab() == ("fleet", "fleet"), f"[적용]: 창 닫힘, 기관별 장비 그대로 {tab()}")
+    fr.locator(f'[data-crew="{vid}"]').first.click(); p.wait_for_timeout(300)
+    p.go_back(); p.wait_for_timeout(600)
+    check(not open_() and tab() == ("fleet", "fleet"), f"창 열고 뒤로가기 = 창만 닫힘 {tab()}")
+    fr.locator(f'[data-crew="{vid}"]').first.click(); p.wait_for_timeout(300)
+    p.click(".eq-btn[data-eqtab=branch]"); p.wait_for_timeout(800)
+    check(not open_() and tab() == ("branch", "branch"), f"창을 연 채 위 메뉴 탭: 창 닫히고 그 탭 {tab()}")
+    p.click(".eq-btn[data-eqtab=fleet]"); p.wait_for_timeout(800)
+    fr.locator(f'[data-crew="{vid}"]').first.click(); p.wait_for_timeout(300); fr.locator("#sheetClose").click(); p.wait_for_timeout(800)
+    check(tab() == ("fleet", "fleet"), f"섞인 뒤에도 [취소]로 닫으면 탭 그대로 {tab()}")
+    p.go_back(); p.wait_for_timeout(600); check(tab() == ("branch", "branch"), f"뒤로가기 = 바로 이전 탭(지사별 요청·편성) {tab()}")
+    p.go_back(); p.wait_for_timeout(600); check(tab() == ("fleet", "fleet"), f"한 번 더 = 그 전 탭(기관별 장비, 빈 칸 없음) {tab()}")
+
+TESTS = [t_help_and_who, t_first_login_admin, t_stop_and_keys, t_role_tabs, t_tab_intro_role_only, t_element_steps, t_demo_steps, t_mobile_reload, t_no_auto_in_automation, t_phone, t_phone_short, t_back_button_tabs, t_sheet_in_frame]
 if __name__ == "__main__":
     with sync_playwright() as pw:
         b = pw.chromium.launch()

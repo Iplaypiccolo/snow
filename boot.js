@@ -172,10 +172,28 @@
   function sameNav(a, b){ return !!a && !!b && a.sp === b.sp && a.st === b.st && (a.sp !== 'equip' || a.et === b.et); }
   function pushNav(){
     if (navLock) return;
-    var s = navState(); if (sameNav(history.state, s)) return;
+    var s = navState();
+    if (history.state && history.state.ssSheet) { frameSheetClose(); try{ history.replaceState(s, '', s.sp === 'equip' ? '#equip' : location.pathname + location.search); }catch(e){} return; }   // 장비 창을 연 채 탭을 바꿈: 창은 닫고 그 기록 칸을 새 탭 칸으로 바꿈
+    if (sameNav(history.state, s)) return;
     try{ history.pushState(s, '', s.sp === 'equip' ? '#equip' : location.pathname + location.search); }catch(e){}
   }
+  /* 장비 지원 창(장비 상세·운전원 선택 등)의 뒤로가기 기록(2026-11-11): 안쪽 화면(iframe)은 기록을 남기지 않고 여기에 부탁함.
+     열 때 지금 탭 칸 + ssSheet 한 칸, 닫을 때 지금 칸이 그 칸이면 한 칸 뒤로(한 번만). 뒤로가기로 그 칸을 벗어나면 창을 닫음 */
+  var sheetBack = false;
+  function frameSheetClose(){ try { var w = frame.contentWindow; if (w && w.SSCloseSheet) w.SSCloseSheet(); } catch(e){} }
+  window.SSSheetOpen = function(){
+    if (history.state && history.state.ssSheet) return;
+    var s = navState(); s.ssSheet = 1;
+    try{ history.pushState(s, ''); }catch(e){}
+  };
+  window.SSSheetClose = function(){
+    if (sheetBack || !(history.state && history.state.ssSheet)) return;
+    sheetBack = true; try{ history.back(); }catch(e){ sheetBack = false; }
+  };
   window.addEventListener('popstate', function(e){
+    var own = sheetBack; sheetBack = false;
+    if (!own) frameSheetClose();                                        // 사람이 뒤로가기를 누름: 열린 창부터 닫음(기록은 이미 한 칸 뒤)
+    if (e.state && e.state.ssSheet) { var c = {}; for (var k in e.state) if (k !== 'ssSheet') c[k] = e.state[k]; try{ history.replaceState(c, ''); }catch(er){} }   // 앞으로 가기로 창 칸에 옴: 창은 없으니 보통 칸으로
     var s = e.state && e.state.ss ? e.state : (e.state && e.state.ssSheet ? null : shell.dataset.first === 'equip' ? { sp: 'equip', et: 'move' } : { sp: 'snow', st: 'forecast' });   // 처음 칸(기록 없음) = 첫 화면
     if (!s) return;
     navLock = true;

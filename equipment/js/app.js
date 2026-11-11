@@ -1551,12 +1551,24 @@ async function resolveZoneReq(id, approve) {
 }
 // 바깥 화면(로그인 알림창의 [지금 보기])이 부름: 지사별 요청·편성 탭에서 특보구역 관리 창을 엶
 window.SSOpenZones = (bid) => { if (!S.me) return false; openZones(bid || null); return true; };
-function closeSheet() { crewPick=null; sheet.classList.remove("wide", "crew-sheet"); sheet.hidden = true; backdrop.hidden = true; hideTip(); if (lastFocus) lastFocus.focus(); lastFocus = null;
-  if (history.state && history.state.ssSheet) { try { history.back(); } catch (e) {} } }      // 창을 열 때 남긴 기록 한 칸을 지움(뒤로가기로 닫은 경우는 이미 지워짐)
-// 뒤로가기(2026-11-02 사용자 요청): 창(장비 상세·보고서 미리 보기 등)이 열리면 기록 한 칸 → 뒤로가기는 창만 닫음. 장비 화면만 따로 열었으면 이전 탭으로
-new MutationObserver(() => { if (!sheet.hidden && !(history.state && history.state.ssSheet)) { try { history.pushState({ ...(history.state || {}), ssSheet: 1 }, ""); } catch (e) {} } })
-  .observe(sheet, { attributes: true, attributeFilter: ["hidden"] });
+/* 뒤로가기(2026-11-02 사용자 요청): 창(장비 상세·운전원 선택·보고서 미리 보기 등)이 열리면 기록 한 칸 → 뒤로가기는 창만 닫음. 장비 화면만 따로 열었으면 이전 탭으로.
+   2026-11-11 고침: 첫 화면 안(iframe)에서 열면 기록을 바깥 화면(boot.js SSSheetOpen·SSSheetClose)이 남기고 지움. 예전엔 안쪽이 따로 기록을 남겨,
+   창을 연 채 위 메뉴 탭을 누르는 등 기록 순서가 섞이면 창을 닫을 때 바깥 화면이 한 칸 뒤로 가서 다른 탭(지사별 요청·편성 등)으로 넘어갔음 */
+const EMBED = window.top !== window;
+let sheetBack = false;         // 장비 화면만 따로 연 경우: 창 기록을 지우려고 뒤로 가는 중(두 번 뒤로 가지 않게)
+function topCall(name) { try { const f = window.top[name]; if (typeof f === "function") { f(); return true; } } catch (e) {} return false; }
+function closeSheet(noHist) { crewPick=null; sheet.classList.remove("wide", "crew-sheet"); sheet.hidden = true; backdrop.hidden = true; hideTip(); if (lastFocus) lastFocus.focus(); lastFocus = null;
+  if (noHist === true) return;                                       // 바깥 화면이 이미 기록을 정리하고 닫으라고 한 경우
+  if (EMBED) { topCall("SSSheetClose"); return; }
+  if (history.state && history.state.ssSheet && !sheetBack) { sheetBack = true; try { history.back(); } catch (e) { sheetBack = false; } } }      // 창을 열 때 남긴 기록 한 칸을 지움(뒤로가기로 닫은 경우는 이미 지워짐)
+window.SSCloseSheet = () => { if (!sheet.hidden) closeSheet(true); };      // 바깥 화면이 부름(뒤로가기·위 메뉴로 탭을 바꿈)
+new MutationObserver(() => {
+  if (sheet.hidden) return;
+  if (EMBED) { topCall("SSSheetOpen"); return; }
+  if (!(history.state && history.state.ssSheet)) { try { history.pushState({ ...(history.state || {}), ssSheet: 1 }, ""); } catch (e) {} }
+}).observe(sheet, { attributes: true, attributeFilter: ["hidden"] });
 window.addEventListener("popstate", e => {
+  sheetBack = false;
   if (!sheet.hidden) return closeSheet();
   if (window.top !== window) return;
   const name = (e.state && e.state.eqTab) || "move", t = document.querySelector(`.tab[data-tab="${name}"]`);
