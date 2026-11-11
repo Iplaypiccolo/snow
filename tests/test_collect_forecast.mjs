@@ -296,6 +296,40 @@ await test('재시도도120초 예산이 끝나면 추가 요청하지 않음', 
   const r=await call(w);assert.equal(w.fetched.length,2);assert.ok(r.j.error.includes('시간이 모자라'));assert.equal(w.puts.length,0);
 });
 
+// 96: 관측 기온(초단기실황 격자 T1H)
+{
+const cells = [[1, 1], [2, 1], [149, 253]];
+const grid = (f) => Array.from({ length: NX * NY }, (_, i) => f(i)).join(',');
+function oworld(opt = {}) {
+  const w = { fetched: [], puts: [], clock: Date.parse('2026-11-11T05:30:00Z'), key: 'obs_key' };
+  w.deps = { now: () => w.clock, sleep: async () => {}, env: () => w.key, auth: { getUser: async () => ({ id: 'u' }) },
+    store: { tokenOk: async (t) => t === 'tok', getProfileById: async () => ({ role: 'admin', disabled: false }),
+      obsPlan: async () => ({ data: { cells, cells_tmfc: 'k1', missing: opt.missing || ['2026-11-11T03:00:00Z', '2026-11-11T04:00:00Z'] }, error: null }),
+      obsPut: async (t, k, v) => { w.puts.push([t, k, v]); return { data: { ok: true }, error: null }; },
+      usage: async () => true, fail: async () => {}, vsrtFail: async () => {} },
+    fetchText: async (u) => { w.fetched.push(u); return opt.resp ? opt.resp(u) : { status: 200, text: grid((i) => (i % 7) - 3) }; } };
+  return w;
+}
+async function ocall(w, body, tok = 'tok') { const r = await handle(new Request('https://x/f', { method: 'POST', headers: { 'x-collector-token': tok }, body: JSON.stringify(body) }), w.deps); return { status: r.status, j: await r.json() }; }
+await test('96 관측 기온: 빈 정시를 초단기실황 격자(T1H)로 받아 격자 순서대로 저장, 키는 응답에 없음', async () => {
+  const w = oworld(), r = await ocall(w, { obs: true });
+  assert.equal(r.j.ok, true); assert.equal(r.j.hours, 2); assert.equal(w.puts.length, 2);
+  assert.ok(w.fetched[0].includes('nph-dfs_odam_grd') && w.fetched[0].includes('vars=T1H') && w.fetched[0].includes('tmfc=202611111200'), w.fetched[0]);
+  assert.equal(w.puts[0][0], '2026-11-11T03:00:00Z'); assert.equal(w.puts[0][1], 'k1'); assert.equal(w.puts[0][2].length, 3); assert.ok(!JSON.stringify(r.j).includes(w.key));
+});
+await test('96 관측 기온: 아직 안 나온 정시는 저장 없이 다음 예약 때, 형식이 다르면 오류', async () => {
+  const w = oworld({ resp: () => ({ status: 200, text: '# dfs_file_read error' }) }), r = await ocall(w, { obs: true });
+  assert.equal(r.j.ok, true); assert.equal(r.j.waiting, 2); assert.equal(w.puts.length, 0);
+  const w2 = oworld({ resp: () => ({ status: 200, text: 'bad' }) }), r2 = await ocall(w2, { obs: true });
+  assert.equal(r2.j.ok, false); assert.ok(r2.j.error.includes('형식'), r2.j.error); assert.equal(w2.puts.length, 0);
+});
+await test('96 관측 기온 시험 호출: 20분 전 정시 한 장, 저장 없음, 권한 없으면 거절', async () => {
+  const w = oworld(), r = await ocall(w, { obs: true, probe: true });
+  assert.equal(r.j.ok, true); assert.equal(w.fetched.length, 1); assert.ok(w.fetched[0].includes('tmfc=202611111400'), w.fetched[0]); assert.equal(w.puts.length, 0); assert.equal(r.j.stats.n, NX * NY);
+  assert.equal((await ocall(oworld(), { obs: true }, 'nope')).status, 401);
+});
+}
+
 const ok = results.filter((r) => r[1]).length;
 results.forEach((r) => console.log((r[1] ? 'PASS ' : 'FAIL ') + r[0] + (r[1] ? '' : '  → ' + r[2])));
 console.log('\n' + ok + '/' + results.length + ' 통과'); process.exit(ok === results.length ? 0 : 1);

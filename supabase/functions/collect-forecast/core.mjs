@@ -14,10 +14,13 @@
 //    기온이 유효 칸 모두 0 인 시각이 오면(정각 발표분에서 2026-11-09 두 번 관찰) 서버가 {incomplete:true} → 그 발표분은 버리고 한 칸 앞(마이그레이션 81)
 //  * 빈 시각 판단: 결측(-90 이하, 바다 칸 -99 포함)을 뺀 유효 칸이 모두 0. 실제 격자는 바다 칸이 -99 라 '모든 칸이 유효' 조건은 맞지 않음(81)
 //  * 처리 중 예상 못 한 오류는 수집 실패(forecast_fail / forecast_vsrt_fail)에 남기고 오류 응답(키는 가림)
+//  * 관측 기온(마이그레이션 96, 2026-11-11 사용자): 본문 {"obs":true} → 초단기실황 격자(nph-dfs_odam_grd) 기온(T1H) 매시 정각 값을 서버가 알려 준 시각만큼 받아 forecast_obs_put.
+//    일별 '오늘' 최저·최고를 날씨누리처럼(지난 시각은 관측) 계산하려는 것. 아직 안 나온 시각('dfs_file_read')은 다음 예약 때. 시험 호출 {"obs":true,"probe":true}: 저장 없이 요약만
 //  * 순수 로직은 Node 로 시험: tests/test_collect_forecast.mjs
 // ============================================================
 export const GRID_URL = 'https://apihub.kma.go.kr/api/typ01/cgi-bin/url/nph-dfs_shrt_grd';
 export const VSRT_URL = 'https://apihub.kma.go.kr/api/typ01/cgi-bin/url/nph-dfs_vsrt_grd';
+export const ODAM_URL = 'https://apihub.kma.go.kr/api/typ01/cgi-bin/url/nph-dfs_odam_grd';      // 96: 초단기실황(관측) 격자
 export const VSRT_VARS = ['T1H', 'RN1', 'POP', 'PTY', 'SKY', 'REH'];      // 시험 호출로 받아 볼 수 있는 초단기 종류. 실제로 받을 종류는 서버(forecast_vsrt_begin)가 정함
 export const NX = 149, NY = 253;
 const BUDGET_MS = 120000, GAP_MS = 500, RETRY_MS = 2000, TRIES = 4;   // 무료 플랜 함수 한 번 최대 150초
@@ -128,6 +131,41 @@ async function collectVsrt(deps, key) {
   return json(200, { ok: !lastErr || done, done, tmfc: used && kstMinute(used), hours: put, waiting: !used, error: done ? undefined : lastErr || undefined });
 }
 
+// 96: 관측 기온 시험 호출 — 20분 전 정시 한 장만 받아 요약(저장 안 함)
+async function probeObs(deps, key) {
+  const tmfc = new Date(Math.floor((deps.now() - 1200000) / 3600000) * 3600000).toISOString();
+  const r = await deps.fetchText(`${ODAM_URL}?tmfc=${kstMinute(tmfc)}&vars=T1H&authKey=${encodeURIComponent(key)}`);
+  const stats = r.status === 200 ? gridStats(r.text) : null;
+  const head = stats && stats.ok ? undefined : String(r.text || '').slice(0, 160).split(key).join('***');
+  return json(200, { ok: r.status === 200 && !!(stats && stats.ok), probe: 'T1H', status: r.status, tmfc: kstMinute(tmfc), stats, head });
+}
+
+// 96: 관측 기온 받기 — 서버가 알려 준 아직 없는 정시들(오래된 것부터)을 한 장씩. 아직 안 나온 시각은 건너뛰고 다음 예약 때
+async function collectObs(deps, key) {
+  const { data: plan, error } = await deps.store.obsPlan();
+  if (error || !plan) return json(500, { ok: false, error: 'db' });
+  if (!plan.cells || !plan.cells.length) return json(200, { ok: false, error: 'no_cells' });
+  const t0 = deps.now(); let put = 0, waiting = 0, lastErr = null;
+  for (const tmfc of plan.missing || []) {
+    if (deps.now() - t0 > BUDGET_MS) { lastErr = '시간이 모자라 다음 예약 때 이어서'; break; }
+    const url = `${ODAM_URL}?tmfc=${kstMinute(tmfc)}&vars=T1H&authKey=${encodeURIComponent(key)}`;
+    let vals = null, status = 0, notReady = false;
+    for (let i = 0; i < TRIES && !vals && !notReady; i++) {
+      if (i) await deps.sleep(RETRY_MS);
+      const r = await deps.fetchText(url); status = r.status;
+      if (r.status === 200 && String(r.text).includes('dfs_file_read')) { notReady = true; break; }
+      vals = r.status === 200 ? pickCells(r.text, plan.cells) : null;
+      if (r.status === 200 && !vals) { status = 'format'; break; }
+    }
+    if (notReady) { waiting++; continue; }
+    if (!vals) { lastErr = status === 'format' ? '기상청 격자 형식이 다름(키·주소 확인)' : `기상청 응답 ${status || '연결 실패'} (관측 ${kstMinute(tmfc)})`; continue; }
+    const { error: e2 } = await deps.store.obsPut(tmfc, plan.cells_tmfc, vals);
+    if (e2) { lastErr = 'DB 저장 실패'; break; }
+    put++; await deps.sleep(GAP_MS);
+  }
+  return json(200, { ok: !lastErr, hours: put, waiting, error: lastErr || undefined });
+}
+
 // 2단계 조사 전용: 지정한 단기 발표/발효 시각 한 건을 조회. DB 계획·저장·실패 기록을 부르지 않음.
 async function probeAt(body, deps, key) {
   const v = String(body.probe || '').toUpperCase(), q = body.probeAt;
@@ -182,6 +220,7 @@ export async function handle(req, deps) {
   let body = {}; try { body = (await req.json()) || {}; } catch (e) { body = {}; }
   if (Object.prototype.hasOwnProperty.call(body, 'probeAt')) return probeAt(body, deps, key);
   if (!key) { await deps.store.fail('KMA_AUTH_KEY 비밀값이 없음'); return json(200, { ok: false, error: 'no_key' }); }
+  if (body.obs) return body.probe ? probeObs(deps, key) : withUsage(deps, true, (d) => collectObs(d, key), key);      // 96: 사용량은 초단기 쪽에 함께 셈
   if (body.vsrt) return body.probe ? probeVsrt(body, deps, key) : withUsage(deps, true, (d) => collectVsrt(d, key), key);
   if (body.probe) {                                   // 시험 호출: 한 시각만 받아 요약만(저장 안 함)
     const v = String(body.probe).toUpperCase();

@@ -28,6 +28,8 @@ const deps = {
     async vsrtPlan() { const { data, error } = await admin.rpc('forecast_vsrt_plan'); if (error) console.error('forecast_vsrt_plan', error.message); return { data, error }; },
     async vsrtBegin(p_tmfc: string) { const { data, error } = await admin.rpc('forecast_vsrt_begin', { p_tmfc }); if (error) console.error('forecast_vsrt_begin', error.message); return { data, error }; },
     async vsrtPut(p_tmfc: string, p_var: string, p_tmef: string, p_vals: number[]) { const { data, error } = await admin.rpc('forecast_vsrt_put', { p_tmfc, p_var, p_tmef, p_vals }); if (error) console.error('forecast_vsrt_put', error.message); return { data, error }; },
+    async obsPlan() { const { data, error } = await admin.rpc('forecast_obs_plan'); if (error) console.error('forecast_obs_plan', error.message); return { data, error }; },
+    async obsPut(p_tmef: string, p_cells_tmfc: string, p_vals: number[]) { const { data, error } = await admin.rpc('forecast_obs_put', { p_tmef, p_cells_tmfc, p_vals }); if (error) console.error('forecast_obs_put', error.message); return { data, error }; },
     async vsrtFail(p_note: string) { const { error } = await admin.rpc('forecast_vsrt_fail', { p_note }); if (error) console.error('forecast_vsrt_fail', error.message); },
   },
 };
