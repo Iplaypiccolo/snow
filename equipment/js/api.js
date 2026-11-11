@@ -53,7 +53,7 @@ const Api = (() => {
     load() {
       const R = SSAuth.rest;
       return Promise.all([SSAuth.restore(), R("hqs?select=id,name,sort,is_private&order=sort"), R("branches?select=id,name,hq_id,status&order=id"),
-        restAll("vehicles?select=" + VCOLS + "&order=sort,id"), R("support_rounds?select=id,name,start_date,days&order=start_date.desc"), R("equip_orgs?select=name"), R("gw_team?select=id,name,sort&order=sort")])
+        restAll("vehicles?select=" + VCOLS + "&order=sort,id"), R("support_rounds?select=id,name,start_date,days,cols_equip,cols_team,day1_equip,day1_team&order=start_date.desc"), R("equip_orgs?select=name"), R("gw_team?select=id,name,sort&order=sort")])
         .then(([me, h, b, v, s, o, t]) => {
           if (!me.ok) return { ok: false, message: me.message || "로그인이 필요합니다.", login: true };
           if (![h, b, v, s].every(r => r.ok)) return { ok: false, message: "자료를 불러오지 못했습니다." };
@@ -62,7 +62,7 @@ const Api = (() => {
     },
     reload() {         // [새로고침] 버튼: 다른 아이디가 바꿨을 수 있는 장비·기준일자 목록만 다시 읽음(본부·지사·로그인은 그대로). 나머지 표는 화면이 이어서 읽음
       const R = SSAuth.rest;
-      return Promise.all([restAll("vehicles?select=" + VCOLS + "&order=sort,id"), R("support_rounds?select=id,name,start_date,days&order=start_date.desc")])
+      return Promise.all([restAll("vehicles?select=" + VCOLS + "&order=sort,id"), R("support_rounds?select=id,name,start_date,days,cols_equip,cols_team,day1_equip,day1_team&order=start_date.desc")])
         .then(([v, s]) => v.ok && s.ok ? { ok: true, vehicles: v.json, rounds: s.json } : fail(v.ok ? s : v, "자료를 불러오지 못했습니다.")).catch(NET);
     },
     routes(from, to) {        // 장비 경로 + 강원 신속대응팀 경로(같은 모양)
@@ -80,8 +80,8 @@ const Api = (() => {
         : `vehicle_routes?select=date,vehicle_id,stops,revised,times&vehicle_id=eq.${encodeURIComponent(vid)}&order=date.desc&limit=400`;
       return SSAuth.rest(q).then(r => r.ok ? { ok: true, rows: r.json } : fail(r)).catch(NET);
     },
-    saveTeam(round, routes, status) {      // routes = [{date, team_id, stops, times}], status = [{team_id, status, off_from}]
-      return SSAuth.authed("/rest/v1/rpc/save_gw_team", { method: "POST", body: { p_round: round, p_routes: routes, p_status: status } }).then(r => r.ok ? { ok: true, result: r.json } : fail(r, null, TEAM_ERR)).catch(NET);
+    saveTeam(round, routes, status, cols, day1) {      // routes = [{date, team_id, stops, times}], status = [{team_id, status, off_from}], cols·day1 = 지원일 칸 수·지원일 1(바꿨을 때만, 94)
+      return SSAuth.authed("/rest/v1/rpc/save_gw_team", { method: "POST", body: { p_round: round, p_routes: routes, p_status: status, ...(cols != null ? { p_cols: cols } : {}), ...(day1 != null ? { p_day1: day1 } : {}) } }).then(r => r.ok ? { ok: true, result: r.json } : fail(r, null, TEAM_ERR)).catch(NET);
     },
     requests(round) {
       return SSAuth.rest(`round_requests?select=round_id,branch_id,req_truck,req_blower,assigned_truck,assigned_blower,offer_truck,saved_at,saved_lv,updated_at,arrive_at,reason,confirmed,warn_level,warn_zones,warn_base,warn_at,warn_note,fc_snow,fc_pcp,fc_snow_hi,fc_pcp_hi,fc_pop,fc_tmin,fc_tmin_at,fc_tmfc,fc_at,wx_manual,wx_snow,wx_pcp,wx_tmin,wx_tmin_at,wx_level,wx_fc,wx_ef&round_id=eq.${+round}`)
@@ -132,8 +132,8 @@ const Api = (() => {
       return SSAuth.rest(`audit_log?select=id,at,username,kind,tab,target,from_val,to_val,ip&tab=in.(${EQUIP_TABS})&order=id.desc&limit=300`)
         .then(r => ({ ok: r.ok, rows: r.ok ? r.json.slice().reverse() : [] })).catch(() => ({ ok: false, rows: [] }));
     },
-    saveFleet(vehicles, routes, round, status) {
-      return SSAuth.authed("/rest/v1/rpc/save_fleet", { method: "POST", body: { p_vehicles: vehicles, p_routes: routes, p_round: round, p_status: status } }).then(r => r.ok ? { ok: true, result: r.json } : fail(r, null, FLEET_ERR)).catch(NET);
+    saveFleet(vehicles, routes, round, status, cols, day1) {      // cols·day1 = 지원일 칸 수·지원일 1(바꿨을 때만, 94 — 경로·지원 여부와 한 번에 저장)
+      return SSAuth.authed("/rest/v1/rpc/save_fleet", { method: "POST", body: { p_vehicles: vehicles, p_routes: routes, p_round: round, p_status: status, ...(cols != null ? { p_cols: cols } : {}), ...(day1 != null ? { p_day1: day1 } : {}) } }).then(r => r.ok ? { ok: true, result: r.json } : fail(r, null, FLEET_ERR)).catch(NET);
     },
     saveRequests(round, rows) {
       return SSAuth.authed("/rest/v1/rpc/save_requests", { method: "POST", body: { p_round: round, p_rows: rows } }).then(r => r.ok ? { ok: true, result: r.json } : fail(r)).catch(NET);
@@ -196,6 +196,10 @@ const Api = (() => {
     const addD = (iso, n) => { const [y, m, d] = iso.split("-").map(Number); const t = new Date(y, m - 1, d + n); return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`; };
     const gov = d => db.rounds.filter(r => r.start_date <= d && d <= addD(r.start_date, (r.days || 10) - 1)).sort((a, b) => b.start_date.localeCompare(a.start_date))[0] || null;
     const stRow = (rid, vid) => db.status.find(x => x.round_id === rid && x.vehicle_id === vid);
+    const colsBad = n => !Number.isInteger(n) || n < 2 || n > 10;
+    const setCols = (rid, f, n) => { const r = db.rounds.find(x => x.id === rid); if (r && (r[f] ?? 4) !== n) { log("수정", "support_rounds", "support_rounds:" + rid, { [f]: r[f] ?? 4 }, { [f]: n }); r[f] = n; } };   // 94
+    const day1Bad = (rid, v) => { const r = db.rounds.find(x => x.id === rid); return !r || !/^\d{4}-\d{2}-\d{2}$/.test(v) || v < r.start_date || v > addD(r.start_date, (r.days || 10) - 1); };
+    const setDay1 = (rid, f, v) => { const r = db.rounds.find(x => x.id === rid); if (r && (r[f] || null) !== v) { log("수정", "support_rounds", "support_rounds:" + rid, { [f]: r[f] || null }, { [f]: v }); r[f] = v; } };
     const avail = (vid, d) => { const r = gov(d), x = r && stRow(r.id, vid); return !!x && x.status === "O" && (!x.off_from || d < x.off_from); };
     // 샘플 대설 특보: 서버 warning_status 와 같은 모양(지사 구역 중 가장 높은 단계)
     const RANK = { "예비": 1, "주의": 2, "경보": 3 };
@@ -220,9 +224,11 @@ const Api = (() => {
       statuses(ids) { return done({ ok: true, rows: clone([...db.status.filter(x => ids.includes(x.round_id)), ...db.teamStatus.filter(x => ids.includes(x.round_id)).map(asVeh)]) }); },
       routes(from, to) { return done({ ok: true, rows: clone([...db.routes, ...db.teamRoutes.map(asVeh)].filter(r => r.date >= from && r.date <= to)) }); },
       vehicleHistory(vid) { return done({ ok: true, rows: clone((isTeamId(vid) ? db.teamRoutes.filter(r => r.team_id === vid) : db.routes.filter(r => r.vehicle_id === vid)).sort((a, b) => b.date.localeCompare(a.date))) }); },
-      saveTeam(round, routes, status) {      // 서버 save_gw_team 흉내: 관리자·강원본부만, 지원 여부 먼저 → 경로(그 날짜를 맡은 기준일자에서 '지원'인 날만). 하나라도 안 되면 전부 취소
+      saveTeam(round, routes, status, cols, day1) {      // 서버 save_gw_team 흉내: 관리자·강원본부만, 지원 여부 먼저 → 경로(그 날짜를 맡은 기준일자에서 '지원'인 날만). 하나라도 안 되면 전부 취소. cols = 지원일 칸 수(94)
         if (!teamOk()) return done(err("42501", TEAM_ERR["42501"]));
-        const rd = db.rounds.find(r => r.id === +round); if (!rd || (!routes.length && !status.length)) return done(err("22023", TEAM_ERR["22023"]));
+        const rd = db.rounds.find(r => r.id === +round); if (!rd || (!routes.length && !status.length && cols == null && day1 == null)) return done(err("22023", TEAM_ERR["22023"]));
+        if (cols != null && colsBad(cols)) return done(err("22023", TEAM_ERR["22023"]));
+        if (day1 != null && day1Bad(+round, day1)) return done(err("23514", "지원일 1은 기준일자 기간 안에서만 고를 수 있습니다."));
         if (status.some(x => !["", "O"].includes(x.status || "") || x.off_from)) return done(err("23514", "지원 여부는 빈칸 또는 '지원'만 됩니다."));      // 66
         if (routes.some(r => (gov(r.date) || {}).id !== +round || r.stops.some(b => !db.branches.some(x => x.id === b)) || r.stops.some((s, i) => i > 0 && s === r.stops[i - 1]))) return done(err("23514", TEAM_ERR["23514"]));      // 64: 바로 연달아 같은 지사만 거절
         if (routes.some(r => !simTimesOk(r))) return done(err("SA008"));
@@ -239,6 +245,8 @@ const Api = (() => {
           else if (i < 0) { db.teamRoutes.push(nr); log("추가", "gw_team_routes", t, null, clone(nr)); }
           else { log("수정", "gw_team_routes", t, { stops: db.teamRoutes[i].stops, times: db.teamRoutes[i].times }, { stops: nr.stops, times: nr.times }); db.teamRoutes[i] = nr; }
         });
+        if (cols != null) setCols(+round, "cols_team", cols);
+        if (day1 != null) setDay1(+round, "day1_team", day1);
         return done({ ok: true });
       },
       requests(round) { return done({ ok: true, rows: clone(db.requests.filter(r => r.round_id === +round)) }); },
@@ -314,7 +322,10 @@ const Api = (() => {
         else { db.zoneOver.push({ branch_id: branch, zone_code: zone, include }); log("추가", "branch_zone_overrides", t, null, { include }); }
         return done({ ok: true });
       },
-      saveFleet(vehicles, routes, round, status) {
+      saveFleet(vehicles, routes, round, status, cols, day1) {      // cols·day1 = 지원일 칸 수·지원일 1(94): 관리자(equip.route)만, 경로·지원 여부와 한 번에
+        if ((cols != null || day1 != null) && !can("equip.route")) return done(err("42501", "지원일 칸 수·지원일 1은 관리자만 바꿀 수 있습니다."));
+        if (cols != null && (colsBad(cols) || !db.rounds.some(r => r.id === +round))) return done(err("22023", FLEET_ERR["22023"]));
+        if (day1 != null && day1Bad(+round, day1)) return done(err("23514", "지원일 1은 기준일자 기간 안에서만 고를 수 있습니다."));
         const addDaysISO = (iso, n) => { const t = new Date(iso + "T00:00:00Z"); t.setUTCDate(t.getUTCDate() + n); return t.toISOString().slice(0, 10); };
         status = status || [];
         // 경로는 관리자(equip.route, 2026-11-02 — 'equip.edit.all' 만 받은 지원장비 아이디는 기계화부와 같음). 기계화부(지원장비)는 자기 기관 장비의 ① 정해진 경로의 도착 예상 시각 ② 지원일 1의 지사 한 곳(배정받은 지사·대수 안에서, 마이그레이션 43)
@@ -380,6 +391,8 @@ const Api = (() => {
             ["stops", "revised", "times"].forEach(f => { if (JSON.stringify(o[f] ?? null) !== JSON.stringify(nr[f] ?? null)) { from[f] = o[f] ?? null; to[f] = nr[f]; } });
             if (Object.keys(to).length) { log("수정", "vehicle_routes", t, from, to); db.routes[i] = nr; } }
         });
+        if (cols != null) setCols(+round, "cols_equip", cols);
+        if (day1 != null) setDay1(+round, "day1_equip", day1);
         return done({ ok: true });
       },
       saveRequests(round, rows) {

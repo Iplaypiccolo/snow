@@ -251,10 +251,10 @@
       // 기관별 장비
       { tab: 'fleet', title: '기관별 장비', desc: '기관 장비의 지원 여부와 날짜별 지원 지사 · 도착 시각 입력' },
       E('fleet', '장비 현황', ['#fleetSum'], '기관 · 장비별 지원 대수', ['맨 앞 칸 = 전체']),
-      E('fleet', '배정지', ['#fleetSum tr.fs-asgn'], '기관 · 장비별로 어느 지사에 몇 대 배정됐는지', ['[배정]의 화살표를 눌러 펴고 접음']),
+      E('fleet', '세부내역', ['#fleetSum tr.fs-asgn'], '기관 · 장비별로 어느 지사에 몇 대 배치됐는지', ['[배치]의 화살표를 눌러 펴고 접음']),
       E('fleet', '장비 추가', [both(['#nvOrg', '#nvType', '#nvPlate', '#vehAdd'])], '기관 · 종류 · 도공번호 → [추가]', ['지사: 지역본부 장비(타지사 지원 가능 확정 뒤)'], W(['기계화부', '지사'])),
-      E('fleet', '지원일 칸 수', ['#colsSel'], '표에 보이는 날짜 칸 수', [], W(ADM)),
-      E('fleet', '지원일 1', ['#day1In'], '첫 날짜 · 나머지 칸은 하루씩 자동', [], W(ADM)),
+      E('fleet', '지원일 칸 수', ['#colsSel'], '표에 보이는 날짜 칸 수', ['[확정]하면 모든 아이디가 이 칸 수로 봄'], W(ADM)),
+      E('fleet', '지원일 1', ['#day1In'], '첫 날짜 · 나머지 칸은 하루씩 자동', ['[확정]하면 모든 아이디가 이 날짜부터 봄'], W(ADM)),
       E('fleet', '지원 여부', ['#eqTable select[data-vs]', { s: '#eqTable tbody td .status', desc: '기관이 정한 지원 여부 (보기)' }],
         '드롭다운 → 지원 · 빈칸', ['새 기준일자는 빈칸으로 시작', '지원 → 날짜 칸이 열림'], W(MEC)),
       E('fleet', '블로워', [inRow('#eqTable input[aria-label$="블로워 소"]:not(:disabled)', ['input[aria-label$="블로워 대"]'])], '장착한 블로워 체크 (소 · 대)', [], W(MEC)),
@@ -273,7 +273,7 @@
       // 강원본부 지원장비
       { tab: 'gwteam', only: gwOk, badge: '강원본부', title: '강원본부 지원장비', desc: '강원 신속대응팀 제설차 4대를 요청 없이 지사에 직접 지원' },
       E('gwteam', '지원 여부', ['#teamTable select[data-vs]'], '드롭다운 → 지원 · 빈칸', ['새 기준일자는 빈칸으로 시작', '지원 → 날짜 칸이 열림'], W(['강원본부'], { only: gwOk })),
-      E('gwteam', '지원일 1', ['#day1InTeam'], '첫 날짜 · 나머지 칸은 하루씩 자동', [], W(['강원본부'], { only: gwOk })),
+      E('gwteam', '지원일 1', ['#day1InTeam'], '첫 날짜 · 나머지 칸은 하루씩 자동', ['[확정]하면 이 날짜부터 저장'], W(['강원본부'], { only: gwOk })),
       E('gwteam', '지원 지사', ['#teamTable .slot select:not(:disabled)'], '그날 갈 지사 · 옆 칸 = 도착 시각', [], W(['강원본부'], { only: gwOk })),
       E('gwteam', '확정', ['#save-gwteam'], '바뀐 칸 → [확정]해야 저장', [], W(['강원본부'], { only: gwOk })),
       // 로그 기록

@@ -77,7 +77,7 @@ const S = {
   alloc: new Map(), adraft: new Map(),                                              // 기관별 배치(고른 기준일자): "기관|지사" → { truck, blower } / adraft = 아직 확정 안 한 변경
   rstat: new Map(), stLoaded: new Set(), sdraft: new Map(), unhideOpen: false,   // rstat: "기준일자|장비" → 지원 여부 {status, off_from, updated_at} / sdraft: 고른 기준일자의 아직 확정 안 한 지원 여부(장비 → 값)
   draft: new Map(), vdraft: new Map(), rdraft: new Map(), revisedMode: false,   // revisedMode: 표 위 [최초 지원]/[수정본] — 고르는 지사 목록과 저장 구분          // 아직 확정·저장하지 않은 변경(경로 / 장비 / 지사 요청)
-  date: todayISO(), day1: todayISO(), cols: 4, round: null,
+  date: todayISO(), colsDraft: new Map(), day1Draft: new Map(), round: null,      // 확정 전 지원일 칸 수·지원일 1("기준일자|equip·team" → 값, 94)
   org: "전체", type: "전체", fleetOrgs: new Set(), bviews: new Set(), closedHq: new Set(), extraStop: new Set(),   // fleetOrgs: 기관별 장비에서 고른 기관(한 곳, 비어 있으면 모든 기관) / bview: 지사별 요청·편성 보기 = all(기본, 아무 버튼도 안 눌림) / req(요청 있는 지사만) / fixed(편성 확정된 지사만) / offer(지원 가능 지사만) / unsaved(저장 안 한 지사만)
   fleetGo: false,                                                                  // 기관별 장비 [지원 장비만]: 고른 기준일자에서 지원 여부가 '지원'인 장비만 보기
   team: [], showTeam: true,                                                        // 강원 신속대응팀 4대(장비 모양) / 이동 현황에 보일지(체크박스, 이 브라우저에 기억)
@@ -342,9 +342,11 @@ function setReq(b, f, val) {
 // 경로·지원 여부 변경(S.draft·S.sdraft)은 기관별 장비와 신속대응팀이 함께 씀 → 장비 번호로 나눠 셈
 const draftKeys = team => [...S.draft.keys()].filter(k => isTeamId(k.split("|")[1]) === team);
 const sdraftKeys = team => [...S.sdraft.keys()].filter(id => isTeamId(id) === team);
-const fleetDirty = () => draftKeys(false).length > 0 || S.vdraft.size > 0 || sdraftKeys(false).length > 0;
-const teamDirty = () => draftKeys(true).length > 0 || sdraftKeys(true).length > 0;
-function clearDrafts(team) { draftKeys(team).forEach(k => S.draft.delete(k)); sdraftKeys(team).forEach(id => S.sdraft.delete(id)); [...S.extraStop].filter(k => isTeamId(k.split("|")[1]) === team).forEach(k => S.extraStop.delete(k)); if (!team) S.vdraft.clear(); }
+const fleetDataDirty = () => draftKeys(false).length > 0 || S.vdraft.size > 0 || sdraftKeys(false).length > 0;      // 경로·지원 여부·장비(엑셀 저장 전에 확정해야 하는 것)
+const fleetDirty = () => fleetDataDirty() || colsDraftOf("equip") != null || day1DraftOf("equip") != null;      // + 보기 칸(지원일 1·칸 수, 94)
+const teamDirty = () => draftKeys(true).length > 0 || sdraftKeys(true).length > 0 || colsDraftOf("team") != null || day1DraftOf("team") != null;
+function clearDrafts(team) { draftKeys(team).forEach(k => S.draft.delete(k)); sdraftKeys(team).forEach(id => S.sdraft.delete(id)); [...S.extraStop].filter(k => isTeamId(k.split("|")[1]) === team).forEach(k => S.extraStop.delete(k)); if (!team) S.vdraft.clear();
+  [S.colsDraft, S.day1Draft].forEach(m => [...m.keys()].filter(k => k.endsWith(team ? "|team" : "|equip")).forEach(k => m.delete(k))); }
 const anyDirty = () => fleetDirty() || teamDirty() || branchDirty() || allocDirty();
 const branchDirty = () => S.rdraft.size > 0;
 
@@ -355,10 +357,23 @@ function identityOf(d) {
   const br = d.branch ? S.branches.find(b => b.name === d.branch) : null, hq = d.hq ? S.hqs.find(h => h.name === d.hq) : null;
   return { label: d.label, username: d.label, role: d.role, perms: d.perms || [], branch_id: br ? br.id : null, org: d.org || null, hq_id: hq ? hq.id : br ? br.hq_id : null };
 }
-function windowDates() { return Array.from({ length: S.cols }, (_, i) => addDays(S.day1, i)); }
+// 94(2026-11-11 사용자): 지원일 칸 수 = 기준일자마다 저장한 값(기관별 장비 cols_equip · 강원본부 지원장비 cols_team, 처음 4). 모든 아이디가 이만큼 봄.
+//  바꾸기: 기관별 장비 = 관리자(equip.route), 강원본부 지원장비 = 관리자·강원본부(canTeam). 바꾸면 '확정하지 않은 변경'이 되고 그 탭의 [확정]으로 함께 저장
+const COLS_F = { equip: "cols_equip", team: "cols_team" };
+const colsSaved = kind => { const r = curRound(), v = r ? Number(r[COLS_F[kind]]) : NaN; return Number.isInteger(v) && v >= 2 && v <= 10 ? v : 4; };
+const colsDraftOf = kind => { const r = curRound(); if (!r) return null; const v = S.colsDraft.get(r.id + "|" + kind); return v != null && v !== colsSaved(kind) ? v : null; };
+const colsOf = kind => colsDraftOf(kind) ?? colsSaved(kind);
+function setColsDraft(kind, n) { const r = curRound(); if (!r) return; n = Math.min(10, Math.max(2, Math.round(+n) || 4)); const k = r.id + "|" + kind; if (n === colsSaved(kind)) S.colsDraft.delete(k); else S.colsDraft.set(k, n); }
+// 지원일 1(94): 기준일자마다 저장한 날짜(day1_equip·day1_team, 없으면 기준일자 첫날), 기준일자 기간 안에서만. 바꾸는 사람·저장은 칸 수와 같음
+const DAY1_F = { equip: "day1_equip", team: "day1_team" };
+const day1Saved = kind => { const r = curRound(); if (!r) return todayISO(); const v = typeof r[DAY1_F[kind]] === "string" ? r[DAY1_F[kind]].slice(0, 10) : ""; return v && v >= r.start_date && v <= roundEnd(r) ? v : r.start_date; };
+const day1DraftOf = kind => { const r = curRound(); if (!r) return null; const v = S.day1Draft.get(r.id + "|" + kind); return v != null && v !== day1Saved(kind) ? v : null; };
+const day1Of = kind => day1DraftOf(kind) ?? day1Saved(kind);
+function setDay1Draft(kind, v) { const r = curRound(); if (!r) return; const k = r.id + "|" + kind; if (v === day1Saved(kind)) S.day1Draft.delete(k); else S.day1Draft.set(k, v); }
+function windowDates(kind) { kind = kind || "equip"; const d1 = day1Of(kind); return Array.from({ length: colsOf(kind) }, (_, i) => addDays(d1, i)); }
 async function ensureRoutes() {          // 기관별 장비 칸(지원일 1~n)과 이동 현황 날짜 앞뒤 2주를 불러 둠
-  const ds = [S.day1, addDays(S.day1, S.cols - 1), addDays(S.date, -14), addDays(S.date, 14)].sort();
-  let from = ds[0], to = ds[3];
+  const ds = ["equip", "team"].flatMap(k => [day1Of(k), addDays(day1Of(k), colsOf(k) - 1)]).concat([addDays(S.date, -14), addDays(S.date, 14)]).sort();
+  let from = ds[0], to = ds[ds.length - 1];
   if (S.loaded && from >= S.loaded[0] && to <= S.loaded[1]) return ensureStatus();
   if (S.loaded) { from = from < S.loaded[0] ? from : S.loaded[0]; to = to > S.loaded[1] ? to : S.loaded[1]; }
   const r = await Api.routes(from, to);
@@ -401,10 +416,10 @@ async function reloadAll() {
   reloading = true; paintReload();
   const r = await Api.reload();
   if (!r.ok) { reloading = false; paintReload(); refresh(); return toast(r.message, true); }
-  S.draft.clear(); S.vdraft.clear(); S.sdraft.clear(); S.rdraft.clear(); S.adraft.clear(); S.extraStop.clear();
+  S.draft.clear(); S.vdraft.clear(); S.sdraft.clear(); S.rdraft.clear(); S.adraft.clear(); S.extraStop.clear(); S.colsDraft.clear(); S.day1Draft.clear();
   S.vehicles = r.vehicles.filter(v => v.active !== false); sortVehicles();
   S.rounds = r.rounds.slice().sort((a, b) => b.start_date.localeCompare(a.start_date));
-  if (!curRound()) { S.round = pickRound(); const rr = curRound(); if (rr) S.day1 = rr.start_date; }      // 보고 있던 기준일자가 지워졌으면 가장 최근 것으로
+  if (!curRound()) S.round = pickRound();      // 보고 있던 기준일자가 지워졌으면 가장 최근 것으로(지원일 1은 그 기준일자에 저장된 날짜, 94)
   S.loaded = null; S.routes.clear(); S.rmeta.clear(); S.rstat.clear(); S.stLoaded.clear();
   await Promise.all([ensureRoutes(), loadReqs(), loadAudit(), loadWarn(), loadAlloc()]);
   S.reloadedAt = new Date().toISOString(); reloading = false; paintReload();
@@ -442,7 +457,7 @@ async function boot() {
     S.me = S.real; S.uid = "__me";
   } else { S.me = identityOf(DEMO[0]); S.uid = DEMO[0].id; }
   Api.setActor(S.me);
-  S.round = pickRound(); const rr = curRound(); if (rr) S.day1 = rr.start_date;
+  S.round = pickRound();
   buildUserSel();
   await Promise.all([ensureRoutes(), loadReqs(), loadAudit(), loadWarn(), loadAlloc()]);
   S.reloadedAt = new Date().toISOString(); paintReload();   // 처음 연 시각도 메뉴 줄 [새로고침] 옆에
@@ -463,7 +478,7 @@ function toast(msg, isErr) {
 }
 const TAB_LABEL = { gw_team_routes: "신속대응팀 경로", gw_team_status: "신속대응팀 지원 여부", vehicles: "장비", vehicle_routes: "경로", round_vehicle_status: "지원 여부", round_requests: "지사 요청", round_allocations: "기관별 배치", support_rounds: "기준일자", branch_zone_overrides: "특보구역" };
 const FIELD = { crew: "운전원", offer_truck: "타지사 지원 가능", rented: "임차", home_branch: "출발 지사", truck: "배정 제설차", blower: "배정 제설기", fc_snow: "확정 예상 적설", fc_pcp: "확정 예상 강수", fc_pop: "확정 강수확률", wx_manual: "기상현황 직접입력", wx_snow: "직접 적설", wx_pcp: "직접 강수", wx_tmin: "직접 최저기온", wx_tmin_at: "직접 최저기온 시각", fc_tmin: "확정 최저기온", wx_level: "직접 대설특보", wx_fc: "직접 특보 발표", wx_ef: "직접 특보 발효", plate: "도공번호", status: "지원 여부", stops: "경로", revised: "구분", times: "도착 예상", snow_cm: "예상 적설", warning: "특보", req_truck: "요청 제설차", req_blower: "요청 제설기",
-  blower_s: "블로워 소", blower_l: "블로워 대", off_from: "지원 불가 시작일", hidden_after: "숨김", days: "기간(일)", assigned_truck: "편성 제설차", assigned_blower: "편성 제설기", arrive_at: "도착 요청", reason: "사유", confirmed: "확정", start_date: "기준일자", type: "장비", org: "기관", warn_level: "확정 특보", include: "특보구역" };
+  blower_s: "블로워 소", blower_l: "블로워 대", off_from: "지원 불가 시작일", hidden_after: "숨김", days: "기간(일)", cols_equip: "기관별 장비 지원일 칸", cols_team: "강원본부 지원장비 지원일 칸", day1_equip: "기관별 장비 지원일 1", day1_team: "강원본부 지원장비 지원일 1", assigned_truck: "편성 제설차", assigned_blower: "편성 제설기", arrive_at: "도착 요청", reason: "사유", confirmed: "확정", start_date: "기준일자", type: "장비", org: "기관", warn_level: "확정 특보", include: "특보구역" };
 const HIDE = new Set(["fc_tmfc", "fc_at", "zone_code", "warn_zones", "warn_base", "warn_at", "warn_note", "updated_by", "updated_at", "confirmed_by", "confirmed_at", "created_by", "created_at", "round_id", "branch_id", "vehicle_id", "team_id", "date", "id", "sort", "active", "name", "end_date"]);
 function fmtField(f, v) {
   if (f === "warn_level" || f === "wx_level") return v ? (WLV[v] || [0, v])[1].replace("대설", "") || v : "특보 없음";
@@ -473,6 +488,8 @@ function fmtField(f, v) {
   if ((f === "wx_fc" || f === "wx_ef") && v) return fmtHM(v);
   if (f === "wx_tmin_at" && v) return fmtWarnTime(v);
   if (f === "include") return v == null ? "자동대로" : v ? "더함" : "뺌";
+  if ((f === "cols_equip" || f === "cols_team") && v != null) return v + "칸";
+  if (f === "day1_equip" || f === "day1_team") return v ? fmtMD(v) : "기준일자 첫날";
   if (v == null || v === "") return f === "stops" ? "(없음)" : f === "hidden_after" ? "숨기지 않음" : f === "off_from" ? "(없음)" : "(빈칸)";
   if (f === "stops") return v.length ? v.map(bn).join(" → ") : "(없음)";
   if (f === "revised") return v ? "수정본" : "최초 지원";
@@ -680,7 +697,6 @@ const NUM_RE = /^\d{1,5}$/;                                           // 도공�
 const plateNum = v => { const p = vval(v, "plate") || ""; return p.startsWith(v.org) ? p.slice(v.org.length) : ""; };
 function renderFleet() {
   const choices = routeChoices(), r = curRound(), all = canAllVeh(), rt = canRoute(), pend = pendingChoices();      // all = 모든 기관 장비(추가·삭제·숨기기), rt = 지원일 칸(관리자)
-  if (!rt) S.cols = 4;                                              // 관리자가 아니면 지원일 칸은 늘 기본 4칸(고르는 목록 없음)
   banner("perm-fleet");
   $("fleetRound").innerHTML = roundSel("roundSelFleet") + (r ? "" : `<span class="hint">기준일자가 없습니다.</span>`);
   renderOrgGrid();
@@ -705,13 +721,13 @@ function renderFleet() {
   $("fleetFilters").innerHTML =
     `<div class="tb-row"><span class="tb-label">기관</span><span class="fgroup">${SOURCE_ORGS().map(orgChip).join("")}</span>` +
     `<span class="tb-sep" aria-hidden="true"></span><button type="button" class="chip" id="onlyGo" aria-pressed="${S.fleetGo}" title="지원 여부가 '지원'인 장비만 보기(다시 누르면 모든 장비)">지원 장비만</button>` +
-    `<span class="tb-right">` + (rt ? `<label class="ctl">지원일 칸 <select class="ci" id="colsSel">${Array.from({ length: 9 }, (_, k) => k + 2).map(n => `<option value="${n}" ${n === S.cols ? "selected" : ""}>${n}개</option>`).join("")}</select></label>` : "") +      // 지원일 칸 수 고르기는 관리자만(다른 계정은 기본 4칸)
+    `<span class="tb-right">` + (rt ? `<label class="ctl">지원일 칸 <select class="ci" id="colsSel">${Array.from({ length: 9 }, (_, k) => k + 2).map(n => `<option value="${n}" ${n === colsOf("equip") ? "selected" : ""}>${n}개</option>`).join("")}</select></label>` : "") +      // 지원일 칸 수 고르기는 관리자만(다른 계정은 저장된 칸 수, 94)
     (rt ? `<button type="button" class="btn" id="fleetReset">초기화</button>` : "") + `</span></div>` +
     (addRow || rt ? `<div class="tb-row">` + addRow +
       (rt ? `<span class="tb-right mode" role="group" aria-label="지원 구분"><label><input type="checkbox" id="modeInit" ${S.revisedMode ? "" : "checked"}> 최초 지원</label>` +
         `<label><input type="checkbox" id="modeRev" ${S.revisedMode ? "checked" : ""}> 수정본</label></span>` : "") + `</div>` : "");
   const dates = windowDates(), head = dates.map((d, i) => `<th class="dayh">지원일 ${i + 1}<span class="sub">` +
-    (i === 0 && rt ? `<input class="ci" type="date" id="day1In" value="${esc(d)}"${r ? ` min="${esc(r.start_date)}"` : ""} aria-label="지원일 1 날짜(나머지 지원일은 하루씩 자동, 기준일자보다 앞은 안 됨)">` : esc(fmtMD(d))) + `</span></th>`).join("");
+    (i === 0 && rt ? `<input class="ci" type="date" id="day1In" value="${esc(d)}"${r ? ` min="${esc(r.start_date)}" max="${esc(roundEnd(r))}"` : ""} aria-label="지원일 1 날짜(나머지 지원일은 하루씩 자동, 기준일자보다 앞은 안 됨)">` : esc(fmtMD(d))) + `</span></th>`).join("");
   const rows = fleetRows().map(v => fleetRowHtml(v, dates, choices, all)).join("");
   $("eqTable").innerHTML = `<thead><tr>${isPhoneW() ? "<th>도공번호</th><th>장비</th><th>블로워</th>" : "<th>도공번호 · 장비 · 블로워</th>"}<th>지원 여부</th><th>운전원</th>${head}${actCol() ? `<th class="unh">${canAllVeh() ? unhideHead() : ""}</th>` : ""}</tr></thead><tbody>${rows || `<tr><td colspan="${(isPhoneW() ? 6 : 4) + dates.length}" class="empty">${S.fleetGo ? "지원 여부가 '지원'인 장비가 없습니다." : "장비가 없습니다."}${addRow && !S.fleetGo ? " 위의 [장비 추가]로 넣으세요." : ""}</td></tr>`}</tbody>`;
   const eqFixed = isPhoneW() ? [plateEm(), 5.8, 5.4, 5.8, 5.4] : [plateEm(), 5.8, 5.4], eqAct = actCol() ? (isPhoneW() ? (canAllVeh() ? 7 : 4) : 4.2) : 0;
@@ -781,7 +797,7 @@ function renderCrewPicker() {
 }
 async function downloadFleet() {
   const round=curRound();if(!round)return toast('기준일자를 선택해 주세요.',true);
-  if(fleetDirty())return toast('변경사항을 먼저 확정한 뒤 저장해 주세요.',true);
+  if(fleetDataDirty())return toast('변경사항을 먼저 확정한 뒤 저장해 주세요.',true);      // 94: 지원일 1·칸 수만 바꾼 것은 엑셀(기준일자 첫날)과 상관없음
   const date=round.start_date, button=$('fleetDownload');button.disabled=true;
   try {
     const [routes,status]=await Promise.all([Api.routes(date,date),Api.statuses([round.id])]);
@@ -823,14 +839,14 @@ function renderOrgGrid() {
   $("orgGrid").innerHTML = `<div class="fs-wrap"><table class="fs-table" id="fleetSum"><thead><tr><th class="l" rowspan="2">상태</th>${OC.map(([o, ts]) => `<th colspan="${ts.length}" class="ed${o ? "" : " tot"}">${esc(o || "전체")}</th>`).join("")}</tr>` +
     `<tr>${cols.map(c => `<th class="${(edge(c) + last(c)).trim()}">${c.t}</th>`).join("")}</tr></thead><tbody>` +
     rowsDef.map(([st, lab, cls]) => `<tr data-fsrow="${esc(lab)}"><th class="l"><span class="status ${cls}">${lab}</span></th>${cols.map(c => num(c, st)).join("")}</tr>`).join("") +
-    `<tr class="fs-asgn" data-fsrow="배정"><th class="l">${maxLines ? `<button type="button" class="fs-tog" data-fsopen aria-expanded="${open}" aria-label="배정지 ${open ? "접기" : "펴기"}">배정 <span aria-hidden="true">${open ? "▴" : "▾"}</span></button>` : "배정"}</th>${cols.map((c, i) => { const n = lists[i].reduce((a, x) => a + x[1], 0); return `<td class="${(n ? "" : "z") + last(c) + edge(c)}" data-fsa="${esc(c.k)}">${n}</td>`; }).join("")}</tr>` +
-    (open ? `<tr class="fs-asg"><th class="l">배정지</th>${cols.map((c, i) => `<td class="${last(c).trim()}${edge(c)}" data-fsl="${esc(c.k)}">${lists[i].length ? lists[i].map(([b, n]) => `<div data-fsb="${esc(b.id)}">${esc(b.name)} ${n}</div>`).join("") : '<span class="muted">-</span>'}</td>`).join("")}</tr>` : "") + `</tbody></table></div>`;
+    `<tr class="fs-asgn" data-fsrow="배정"><th class="l">${maxLines ? `<button type="button" class="fs-tog" data-fsopen aria-expanded="${open}" aria-label="세부내역 ${open ? "접기" : "펴기"}">배치 <span aria-hidden="true">${open ? "▴" : "▾"}</span></button>` : "배치"}</th>${cols.map((c, i) => { const n = lists[i].reduce((a, x) => a + x[1], 0); return `<td class="${(n ? "" : "z") + last(c) + edge(c)}" data-fsa="${esc(c.k)}">${n}</td>`; }).join("")}</tr>` +
+    (open ? `<tr class="fs-asg"><th class="l">세부내역</th>${cols.map((c, i) => `<td class="${last(c).trim()}${edge(c)}" data-fsl="${esc(c.k)}">${lists[i].length ? lists[i].map(([b, n]) => `<div data-fsb="${esc(b.id)}">${esc(b.name)} ${n}</div>`).join("") : '<span class="muted">-</span>'}</td>`).join("")}</tr>` : "") + `</tbody></table></div>`;
 }
 // 바뀐 장비 한 줄 / 칸 하나만 다시 그림. 그 칸에 있던 커서는 되살림
 function keepFocus(fn) { const a = document.activeElement, fk = a && a.dataset && a.dataset.fk; fn(); if (fk) { const n = [...document.querySelectorAll("[data-fk]")].find(i => i.dataset.fk === fk); if (n && n !== document.activeElement) n.focus(); } }
 function patchVehicle(vid) {
   const v = vehById(vid), tr = document.querySelector(`${isTeam(v) ? "#teamTable" : "#eqTable"} tr[data-vrow="${CSS.escape(vid)}"]`);
-  if (v && tr) keepFocus(() => { tr.outerHTML = isTeam(v) ? teamRowHtml(v, windowDates()) : fleetRowHtml(v, windowDates(), routeChoices(), can("equip.edit.all")); });
+  if (v && tr) keepFocus(() => { tr.outerHTML = isTeam(v) ? teamRowHtml(v, windowDates("team")) : fleetRowHtml(v, windowDates("equip"), routeChoices(), can("equip.edit.all")); });
   if (!isTeam(v)) renderOrgGrid();
   afterAnyChange();
 }
@@ -916,17 +932,20 @@ async function confirmFleet() {
   const vehicles = [...S.vdraft].map(([id, f]) => ({ id, ...f })), routes = draftKeys(false).map(k => { const [date, vehicle_id] = k.split("|"), x = S.draft.get(k);
     return { date, vehicle_id, stops: x.stops, revised: x.revised, times: x.times.some(Boolean) ? x.times : null }; });
   const status = sdraftKeys(false).map(vehicle_id => { const x = S.sdraft.get(vehicle_id); return { vehicle_id, status: x.status, off_from: x.off_from || null, crew: (x.crew || []).slice() }; });       // 신속대응팀 변경은 그 탭의 [확정]으로
+  const cols = colsDraftOf("equip"), day1 = day1DraftOf("equip");      // 94: 지원일 칸 수·지원일 1(바꿨을 때만, 관리자)
   if (orderBlock(draftKeys(false))) return;
-  if (!vehicles.length && !routes.length && !status.length) return;
-  if ((routes.length || status.length) && !S.round) return toast("기준일자가 없어 지원 여부·경로를 확정할 수 없습니다. 지사별 요청·편성에서 기준일자를 먼저 만드세요.", true);
-  const what = [routes.length ? `경로 ${routes.length}칸` : "", status.length ? `지원 여부·운전원 ${status.length}대` : "", vehicles.length ? `장비 ${vehicles.length}대(번호·블로워)` : ""].filter(Boolean).join(", ");
+  if (!vehicles.length && !routes.length && !status.length && cols == null && day1 == null) return;
+  if ((routes.length || status.length || cols != null || day1 != null) && !S.round) return toast("기준일자가 없어 지원 여부·경로를 확정할 수 없습니다. 지사별 요청·편성에서 기준일자를 먼저 만드세요.", true);
+  const what = [routes.length ? `경로 ${routes.length}칸` : "", status.length ? `지원 여부·운전원 ${status.length}대` : "", vehicles.length ? `장비 ${vehicles.length}대(번호·블로워)` : "", day1 != null ? `지원일 1 ${fmtMD(day1)}` : "", cols != null ? `지원일 칸 ${cols}개` : ""].filter(Boolean).join(", ");
   if (!confirm(`${what} 변경을 확정할까요?\n지원 여부는 기준일자 ${fmtMD(curRound().start_date)} 것으로 저장되고, 경로는 날짜별로 남습니다.`)) return;
   busy("fleet", true);
-  const r = await Api.saveFleet(vehicles, routes, S.round, status);
+  const r = await Api.saveFleet(vehicles, routes, S.round, status, cols, day1);
   busy("fleet", false);
   if (!r.ok) return toast(r.message, true);
   const now = new Date().toISOString();
   vehicles.forEach(p => Object.assign(vehById(p.id), p)); sortVehicles();
+  if (cols != null && curRound()) curRound().cols_equip = cols;      // 94: 저장된 칸 수·지원일 1
+  if (day1 != null && curRound()) curRound().day1_equip = day1;
   status.forEach(x => S.rstat.set(S.round + "|" + x.vehicle_id, { status: x.status, off_from: x.off_from, crew: (x.crew || []).slice(), updated_at: now }));
   routes.forEach(x => { const k = rk(x.date, x.vehicle_id); if (x.stops.length) { S.routes.set(k, normRec(x)); S.rmeta.set(k, now); } else S.routes.delete(k); });
   clearDrafts(false);
@@ -934,7 +953,7 @@ async function confirmFleet() {
   toast(`확정했습니다 (${what})`);
 }
 function resetFleet() {          // 보이는 장비의 지원 여부(고른 기준일자)와, 고른 기준일자가 맡은 날짜의 경로를 비움(확정 전 되돌리기 가능)
-  const vs = fleetRows().filter(canVeh), cr = curRound(), ds = windowDates().filter(d => cr && (govRound(d) || {}).id === cr.id);
+  const vs = fleetRows().filter(canVeh), cr = curRound(), ds = windowDates("equip").filter(d => cr && (govRound(d) || {}).id === cr.id);
   if (!vs.length || !canRoute() || !cr) return;
   if (!confirm(`보이는 장비 ${vs.length}대의 지원 여부와 ${ds.length ? `지원일 ${fmtMD(ds[0])} ~ ${fmtMD(ds[ds.length - 1])} 경로를` : "경로를"} 모두 비울까요?\n[확정]을 눌러야 서버에 반영되고, 그 전에는 [되돌리기]로 돌아갈 수 있습니다.`)) return;
   vs.forEach(v => { ds.forEach(d => setRoute(d, v.id, EMPTY)); if (!isPool(v)) setStat(v.id, { status: "" }); });      // 지역본부 장비의 지원 여부는 늘 '지원'(경로만 비움)
@@ -944,11 +963,11 @@ function resetFleet() {          // 보이는 장비의 지원 여부(고른 기
    [5-2] 강원본부 지원장비 — 강원 신속대응팀 4대. 기관별 장비 아래 표와 같은 방식(지원 여부·날짜별 경로), 관리자·강원본부만 고침
    ============================================================ */
 function renderTeam() {
-  const r = curRound(), ed = canTeam(), dates = windowDates();
+  const r = curRound(), ed = canTeam(), dates = windowDates("team");
   $("teamRound").innerHTML = roundSel("roundSelTeam") + (r ? "" : `<span class="hint">기준일자가 없습니다.</span>`);
-  $("teamFilters").innerHTML = ed ? `<div class="tb-row"><span class="tb-right"><label class="ctl">지원일 칸 <select class="ci" id="colsSelTeam">${Array.from({ length: 9 }, (_, k) => k + 2).map(n => `<option value="${n}" ${n === S.cols ? "selected" : ""}>${n}개</option>`).join("")}</select></label></span></div>` : "";
+  $("teamFilters").innerHTML = ed ? `<div class="tb-row"><span class="tb-right"><label class="ctl">지원일 칸 <select class="ci" id="colsSelTeam">${Array.from({ length: 9 }, (_, k) => k + 2).map(n => `<option value="${n}" ${n === colsOf("team") ? "selected" : ""}>${n}개</option>`).join("")}</select></label></span></div>` : "";
   const head = dates.map((d, i) => `<th class="dayh">지원일 ${i + 1}<span class="sub">` +
-    (i === 0 && ed ? `<input class="ci" type="date" id="day1InTeam" value="${esc(d)}"${r ? ` min="${esc(r.start_date)}"` : ""} aria-label="지원일 1 날짜(나머지 지원일은 하루씩 자동, 기준일자보다 앞은 안 됨)">` : esc(fmtMD(d))) + `</span></th>`).join("");
+    (i === 0 && ed ? `<input class="ci" type="date" id="day1InTeam" value="${esc(d)}"${r ? ` min="${esc(r.start_date)}" max="${esc(roundEnd(r))}"` : ""} aria-label="지원일 1 날짜(나머지 지원일은 하루씩 자동, 기준일자보다 앞은 안 됨)">` : esc(fmtMD(d))) + `</span></th>`).join("");
   $("teamTable").innerHTML = `<thead><tr><th>장비</th><th>지원 여부</th>${head}</tr></thead><tbody>${S.team.map(v => teamRowHtml(v, dates)).join("") || `<tr><td colspan="${2 + dates.length}" class="empty">장비가 없습니다.</td></tr>`}</tbody>`;
   dayCols($("teamTable"), [11.5, 5.8], dates.length, 0); fitPanel($("teamTable"));
 }
@@ -963,17 +982,20 @@ async function confirmTeam() {
   if (S.preview) return toast("미리보기에서는 확정할 수 없습니다. '내 아이디'로 돌아오세요.", true);
   const routes = draftKeys(true).map(k => { const [date, team_id] = k.split("|"), x = S.draft.get(k); return { date, team_id, stops: x.stops, revised: false, times: x.times.some(Boolean) ? x.times : null }; });
   const status = sdraftKeys(true).map(team_id => { const x = S.sdraft.get(team_id); return { team_id, status: x.status, off_from: x.off_from || null }; });
-  if (!routes.length && !status.length) return;
+  const cols = colsDraftOf("team"), day1 = day1DraftOf("team");      // 94: 지원일 칸 수·지원일 1(바꿨을 때만, 관리자·강원본부)
+  if (!routes.length && !status.length && cols == null && day1 == null) return;
   if (orderBlock(draftKeys(true))) return;
   if (!S.round) return toast("기준일자가 없어 확정할 수 없습니다. 지사별 요청·편성에서 기준일자를 먼저 만드세요.", true);
-  const what = [routes.length ? `경로 ${routes.length}칸` : "", status.length ? `지원 여부 ${status.length}대` : ""].filter(Boolean).join(", ");
+  const what = [routes.length ? `경로 ${routes.length}칸` : "", status.length ? `지원 여부 ${status.length}대` : "", day1 != null ? `지원일 1 ${fmtMD(day1)}` : "", cols != null ? `지원일 칸 ${cols}개` : ""].filter(Boolean).join(", ");
   if (!confirm(`강원 신속대응팀 ${what} 변경을 확정할까요?
 지원 여부는 기준일자 ${fmtMD(curRound().start_date)} 것으로 저장되고, 경로는 날짜별로 남습니다.`)) return;
   busy("gwteam", true);
-  const r = await Api.saveTeam(S.round, routes, status);
+  const r = await Api.saveTeam(S.round, routes, status, cols, day1);
   busy("gwteam", false);
   if (!r.ok) return toast(r.message, true);
   const now = new Date().toISOString();
+  if (cols != null && curRound()) curRound().cols_team = cols;      // 94: 저장된 칸 수·지원일 1
+  if (day1 != null && curRound()) curRound().day1_team = day1;
   status.forEach(x => S.rstat.set(S.round + "|" + x.team_id, { status: x.status, off_from: x.off_from, updated_at: now }));
   routes.forEach(x => { const k = rk(x.date, x.team_id); if (x.stops.length) { S.routes.set(k, normRec(x)); S.rmeta.set(k, now); } else S.routes.delete(k); });
   clearDrafts(true);
@@ -1305,8 +1327,7 @@ async function deleteRound() {
 }
 async function switchRound(id, force) {
   if (!force && anyDirty() && !confirm("확정·저장하지 않은 변경이 있습니다. 버리고 기준일자를 바꿀까요?")) { refresh(); return; }
-  S.rdraft.clear(); S.draft.clear(); S.vdraft.clear(); S.sdraft.clear(); S.adraft.clear(); S.extraStop.clear(); S.unhideOpen = false; S.nvSel = ""; S.nvRent = false; S.round = +id || null;   // 지원 여부·경로 변경은 기준일자마다 따로라 버림
-  const r = curRound(); if (r) S.day1 = r.start_date;               // 기준일자를 고르면 지원일 1도 그 날짜로
+  S.rdraft.clear(); S.draft.clear(); S.vdraft.clear(); S.sdraft.clear(); S.adraft.clear(); S.extraStop.clear(); S.colsDraft.clear(); S.day1Draft.clear(); S.unhideOpen = false; S.nvSel = ""; S.nvRent = false; S.round = +id || null;   // 지원 여부·경로 변경은 기준일자마다 따로라 버림
   await Promise.all([loadReqs(), ensureRoutes(), loadWarn(), loadAlloc()]); refresh();
 }
 
@@ -1548,17 +1569,21 @@ document.addEventListener("keydown", e => { if (e.key === "Escape" && !sheet.hid
    [9] 저장 바·그리기
    ============================================================ */
 function busy(t, on) { const bar = $("save-" + t); bar.classList.toggle("busy", on); bar.querySelectorAll("button").forEach(b => { b.disabled = on || b.disabled; }); if(t === "fleet") $("fleetDownload").disabled = on; }
+// 저장 바 글에 지원일 칸 수 변경을 덧붙임(94). base = 다른 변경 글(없으면 "")
+const colsNote = (kind, base) => { const c = colsDraftOf(kind), d1 = day1DraftOf(kind);
+  const t = [d1 != null ? `지원일 1 ${fmtMD(day1Saved(kind))} → ${fmtMD(d1)}` : "", c != null ? `지원일 칸 ${colsSaved(kind)}개 → ${c}개` : ""].filter(Boolean).join(" · ");
+  return !t ? base : base ? base + " · " + t : "확정하지 않은 변경: " + t; };
 function updateSavebars() {
   const fb = $("save-fleet"), bb = $("save-branch"), ab = $("save-alloc");
   fb.hidden = !(can("equip.edit.all") || can("equip.edit.own") || myPoolN() > 0 || (canPoolAdd() && fleetDirty())); bb.hidden = true; ab.hidden = !canRoute() || !S.round;
   const fd = fleetDirty(), bd = branchDirty(), ad = allocDirty(), td = teamDirty(), tb = $("save-gwteam");
   tb.hidden = !canTeam() || !S.round; tb.classList.toggle("dirty", td);
-  tb.querySelector(".save-state").textContent = td ? `확정하지 않은 변경: 경로 ${draftKeys(true).length}칸${sdraftKeys(true).length ? ` · 지원 여부 ${sdraftKeys(true).length}대` : ""}` + (S.preview ? " (미리보기 — 확정 불가)" : "") : "변경 사항 없음";
+  tb.querySelector(".save-state").textContent = td ? colsNote("team", draftKeys(true).length || sdraftKeys(true).length ? `확정하지 않은 변경: 경로 ${draftKeys(true).length}칸${sdraftKeys(true).length ? ` · 지원 여부 ${sdraftKeys(true).length}대` : ""}` : "") + (S.preview ? " (미리보기 — 확정 불가)" : "") : "변경 사항 없음";
   tb.querySelector("[data-revert]").disabled = !td; tb.querySelector("[data-save]").disabled = !td || S.preview;
   fb.classList.toggle("dirty", fd); bb.classList.toggle("dirty", bd); ab.classList.toggle("dirty", ad);
   ab.querySelector(".save-state").textContent = ad ? `확정하지 않은 변경: ${S.adraft.size}칸` + (S.preview ? " (미리보기 — 확정 불가)" : "") : "변경 사항 없음";
   ab.querySelector("[data-revert]").disabled = !ad; ab.querySelector("[data-save]").disabled = !ad || S.preview;
-  fb.querySelector(".save-state").textContent = fd ? `확정하지 않은 변경: 경로 ${draftKeys(false).length}칸${sdraftKeys(false).length ? ` · 지원 여부·운전원 ${sdraftKeys(false).length}대` : ""}${S.vdraft.size ? ` · 장비 ${S.vdraft.size}대` : ""}` + (S.preview ? " (미리보기 — 확정 불가)" : "") : "변경 사항 없음";
+  fb.querySelector(".save-state").textContent = fd ? colsNote("equip", draftKeys(false).length || sdraftKeys(false).length || S.vdraft.size ? `확정하지 않은 변경: 경로 ${draftKeys(false).length}칸${sdraftKeys(false).length ? ` · 지원 여부·운전원 ${sdraftKeys(false).length}대` : ""}${S.vdraft.size ? ` · 장비 ${S.vdraft.size}대` : ""}` : "") + (S.preview ? " (미리보기 — 확정 불가)" : "") : "변경 사항 없음";
   bb.querySelector(".save-state").textContent = bd ? `저장하지 않은 변경: ${S.rdraft.size}개 지사` + (S.preview ? " (미리보기 — 저장 불가)" : "") : "변경 사항 없음";
   const bdn = $("brDirty"); if (bdn) { bdn.textContent = bd ? `저장하지 않은 지사 ${S.rdraft.size}곳` + (S.preview ? " (미리보기 — 저장 불가)" : "") : ""; bdn.hidden = !bd; }
   fb.querySelector("[data-revert]").disabled = !fd; fb.querySelector("[data-save]").disabled = !fd || S.preview;
@@ -1601,13 +1626,15 @@ document.addEventListener("change", async e => {
     if (!S.showTeam && S.org === TEAM) S.org = "전체";
     renderMatrix(); renderFilters(); return renderDest();
   }
-  if (t.id === "day1In" || t.id === "day1InTeam") {          // 지원일 1: 기준일자보다 앞 날짜는 안 됨(기관별 장비·신속대응팀 같은 칸)
-    if (!t.value) return; const r = curRound();
-    if (r && t.value < r.start_date) { toast(`지원일은 기준일자(${fmtMD(r.start_date)})부터 고를 수 있습니다`, true); S.day1 = r.start_date; } else S.day1 = t.value;
-    S.extraStop.clear(); await ensureRoutes(); return refresh();
+  if (t.id === "day1In" || t.id === "day1InTeam") {          // 지원일 1: 기준일자 기간 안. 94: 확정 전 변경 → [확정]으로 저장(기관별 장비 = 관리자, 강원본부 지원장비 = 관리자·강원본부, 따로)
+    const kind = t.id === "day1In" ? "equip" : "team", r = curRound();
+    if (!r || !t.value || !(kind === "equip" ? canRoute() : canTeam())) return refresh();
+    if (t.value < r.start_date) { toast(`지원일은 기준일자(${fmtMD(r.start_date)})부터 고를 수 있습니다`, true); return refresh(); }
+    if (t.value > roundEnd(r)) { toast(`지원일 1은 기준일자 기간(${fmtMD(r.start_date)} ~ ${fmtMD(roundEnd(r))}) 안에서 고를 수 있습니다`, true); return refresh(); }
+    setDay1Draft(kind, t.value); S.extraStop.clear(); await ensureRoutes(); return refresh();
   }
-  if (t.id === "colsSelTeam") { if (!canTeam()) return refresh(); S.cols = Math.min(10, Math.max(2, +t.value)); await ensureRoutes(); return refresh(); }
-  if (t.id === "colsSel") { if (!canRoute()) return refresh(); S.cols = Math.min(10, Math.max(2, +t.value)); await ensureRoutes(); return refresh(); }
+  if (t.id === "colsSelTeam") { if (!canTeam() || !curRound()) return refresh(); setColsDraft("team", t.value); await ensureRoutes(); return refresh(); }      // 94: 확정 전 변경(강원본부 지원장비 = 관리자·강원본부)
+  if (t.id === "colsSel") { if (!canRoute() || !curRound()) return refresh(); setColsDraft("equip", t.value); await ensureRoutes(); return refresh(); }      // 94: 확정 전 변경(기관별 장비 = 관리자만)
   if (t.id === "logUser") { S.logUser = t.value; return renderLog(); }
   if (t.id === "zbr") { S.zask = null; return renderZones(); }
   if (t.dataset.rv) {                       // 경로 칸(관리자): 그 (날짜, 장비)의 지사 목록을 다시 모음
@@ -1788,7 +1815,7 @@ function buildUserSel() {
 }
 async function switchUser(uid) {
   if (anyDirty() && !confirm("확정·저장하지 않은 변경이 있습니다. 버리고 아이디를 바꿀까요?")) { $("userSel").value = S.uid; return; }
-  S.draft.clear(); S.vdraft.clear(); S.sdraft.clear(); S.rdraft.clear(); S.adraft.clear(); S.extraStop.clear();
+  S.draft.clear(); S.vdraft.clear(); S.sdraft.clear(); S.rdraft.clear(); S.adraft.clear(); S.extraStop.clear(); S.colsDraft.clear(); S.day1Draft.clear();
   S.uid = uid; S.me = uid === "__me" ? S.real : identityOf(DEMO.find(d => d.id === uid));
   S.preview = !!S.real && uid !== "__me";
   Api.setActor(S.me); if (!sheet.hidden) closeSheet();

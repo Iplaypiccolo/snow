@@ -82,7 +82,7 @@ class Mock:
         self.vehicles = [{"id": "V001", "org": "서울경기", "type": "제설차", "plate": "서울경기901", "status": "O", "sort": 10, "active": True},
                          {"id": "V002", "org": "충북", "type": "제설기", "plate": "충북901", "status": "O", "sort": 20, "active": True}]
         self.routes = [{"date": self.today, "vehicle_id": "V002", "stops": ["B019"]}]
-        self.rounds = [{"id": 1, "name": self.today + " 기준", "start_date": self.today, "days": 10}]
+        self.rounds = [{"id": 1, "name": self.today + " 기준", "start_date": self.today, "days": 10, "cols_equip": 4, "cols_team": 4, "day1_equip": None, "day1_team": None}]
         # 기준일자별 지원 여부(마이그레이션 38)
         self.rstatus = [{"round_id": 1, "vehicle_id": v["id"], "status": v["status"], "off_from": None, "updated_at": "2026-10-08T00:00:00Z"} for v in self.vehicles]
         self.round_reqs = [{"round_id": 1, "branch_id": "B019", "req_truck": 2, "req_blower": 0, "assigned_truck": 1, "assigned_blower": 0,
@@ -347,6 +347,13 @@ class Mock:
                     ok = lambda vid: self.can(u, "equip.edit.all") or (self.can(u, "equip.edit.own") and next((v for v in self.vehicles if v["id"] == vid), {}).get("org") == u["profile"].get("org"))
                     st, rid = body.get("p_status") or [], body.get("p_round")
                     if any("status" in v for v in body["p_vehicles"]) or ((body["p_routes"] or st) and not any(r["id"] == rid for r in self.rounds)): return send(400, {"code": "22023", "message": "bad input"})
+                    pc = body.get("p_cols")                                                     # 94: 지원일 칸 수 — 관리자(equip.route)만, 2~10
+                    pd = body.get("p_day1")                                                     # 94: 지원일 1 — 관리자만, 기준일자 기간 안
+                    if (pc is not None or pd is not None) and not self.can(u, "equip.route"): return send(403, {"code": "42501", "message": "view: equip.route required"})
+                    if pd is not None:
+                        rr = next((r for r in self.rounds if r["id"] == rid), None)
+                        if not rr or not (rr["start_date"] <= pd <= (datetime.date.fromisoformat(rr["start_date"]) + datetime.timedelta(days=rr.get("days", 10) - 1)).isoformat()): return send(400, {"code": "23514", "message": "day1 must be within the round"})
+                    if pc is not None and (not isinstance(pc, int) or not 2 <= pc <= 10 or not any(r["id"] == rid for r in self.rounds)): return send(400, {"code": "22023", "message": "bad input"})
                     if any(not ok(v["id"]) for v in body["p_vehicles"]) or any(not ok(x["vehicle_id"]) for x in st) or any(not route_ok(r["vehicle_id"]) for r in body["p_routes"]): return send(403, {"code": "42501", "message": "route not allowed"})
                     if any(x.get("status") not in ("", "O") or x.get("off_from") for x in st): return send(400, {"code": "23514", "message": "new row violates check constraint"})   # 66: 빈칸·지원만, 지원 불가 시작일 없음
                     allowed_crew='abcdefghijklmnopqrstuvwxyz가나다라마바사아자차카타파하'
@@ -357,6 +364,8 @@ class Mock:
                         cur.update(status=x["status"], off_from=x.get("off_from") if x["status"] == "O" else None, updated_at="2026-10-08T01:00:00Z")
                     for r in body["p_routes"]:
                         self.routes = [x for x in self.routes if not (x["date"] == r["date"] and x["vehicle_id"] == r["vehicle_id"])] + ([r] if r["stops"] else [])
+                    if pc is not None: next(r for r in self.rounds if r["id"] == rid)["cols_equip"] = pc
+                    if pd is not None: next(r for r in self.rounds if r["id"] == rid)["day1_equip"] = pd
                     return send(200, {"vehicles": len(body["p_vehicles"]), "status": len(st), "routes_saved": len(body["p_routes"]), "routes_deleted": 0})
                 # save_requests: 실제로 반영(서버 트리거 흉내 — 확정한 줄은 확정 열 말고는 못 바꿈 55000, 확정·편성은 req.confirm)
                 rid = body["p_round"]; LOCK = ("req_truck", "req_blower", "assigned_truck", "assigned_blower", "arrive_at", "reason", "wx_manual", "wx_snow", "wx_pcp", "wx_tmin", "wx_tmin_at", "wx_level", "wx_fc", "wx_ef")
@@ -379,7 +388,7 @@ class Mock:
                 if not self.can(u, "req.confirm"): return send(403, {"code": "42501", "message": "no"})
                 if any(r["start_date"] >= d for r in self.rounds): return send(400, {"code": "23514", "message": "round must start after the latest one"})
                 prev = max(self.rounds, key=lambda r: r["start_date"]) if self.rounds else None
-                nr = {"id": max([r["id"] for r in self.rounds] + [0]) + 1, "name": d + " 기준", "start_date": d, "days": 10}; self.rounds.append(nr)
+                nr = {"id": max([r["id"] for r in self.rounds] + [0]) + 1, "name": d + " 기준", "start_date": d, "days": 10, "cols_equip": 4, "cols_team": 4, "day1_equip": None, "day1_team": None}; self.rounds.append(nr)
                 for v in self.vehicles:
                     if v.get("hidden_after") and d > v["hidden_after"]: continue
                     p = next((x for x in self.rstatus if prev and x["round_id"] == prev["id"] and x["vehicle_id"] == v["id"]), None)

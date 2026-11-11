@@ -40,7 +40,7 @@ def download(p):
     result=T.ev(p,"""(async()=>{const round=curRound(),date=round.start_date,b=S.branches[0].id;
       const v=S.vehicles.find(v=>!isPool(v)&&v.type==='제설차');
       const out=await Api.saveFleet([],[{date,vehicle_id:v.id,stops:[b],times:null,revised:false}],round.id,[{vehicle_id:v.id,status:'O',off_from:null,crew:['c','하']}]);
-      await reloadAll();S.day1=addDays(date,2);renderFleet();return {ok:out.ok,date,number:plateNum(v),org:v.org};})()""")
+      await reloadAll();curRound().day1_equip=addDays(date,2);renderFleet();return {ok:out.ok,date,number:plateNum(v),org:v.org};})()""")
     T.check(result['ok'],'첫날 지원 배정 준비');T.tab(p,'fleet')
     with p.expect_download() as dl:p.click('#fleetDownload')
     file=dl.value;T.check(result['date'] in file.suggested_filename,'표시 중인 날짜 대신 기준일자 첫날 파일명')

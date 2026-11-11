@@ -44,6 +44,16 @@
 
 ## 기록 (최신이 맨 위)
 
+### 2026-11-11 · 커밋 (이 기록 커밋 하나) · 지원일 칸 수·지원일 1 저장(SQL94), 장비 현황 표 이름
+- `supabase/migrations/20261111_94_round_cols.sql`(사용자 "그대로 적용해" 뒤 적용 — 11/7 기준일자 4/4칸·지원일 1 비어 있음 확인, 실행 권한 그대로, 보안 점검 새 종류 없음): `support_rounds.cols_equip`·`cols_team`(2~10, 처음 4)·`day1_equip`·`day1_team`(없으면 기준일자 첫날, 기준일자 기간 안만), `private.set_round_view`,
+  `save_fleet`·`save_gw_team` 에 `p_cols`·`p_day1`(다시 만들고 실행 권한 그대로). 되돌린 시험: 관리자 둘 다 됨, 강원본부는 지원장비만(기관별 장비 거절), 지사 둘 다 거절·직접 고치기도 막힘, 11칸·기간 밖 날짜·없는 기준일자·빈 저장 거절, 칸 수만 저장하면 지원일 1 그대로, 같은 값이면 수정 기록 안 늘어남.
+  **화면이 새 열을 읽으므로 SQL94 를 먼저 적용한 뒤 화면을 반영할 것.**
+- `equipment/js/app.js`: `S.cols`·`S.day1` 없앰 → `colsOf`·`day1Of('equip'|'team')`(저장값 + 확정 전 변경 `S.colsDraft`·`S.day1Draft`), `windowDates(kind)`, 저장 바 "지원일 1 11/7 → 11/9 · 지원일 칸 4개 → 6개", [확정]·[되돌리기]·아이디·기준일자 바꿀 때 함께. 지원일 1 입력에 기준일자 끝 날짜(max). 엑셀 저장은 경로·지원 여부 변경만 막음(`fleetDataDirty`). 수정 기록 이름 '…지원일 칸'·'…지원일 1'.
+- `equipment/js/api.js`: 기준일자 읽을 때 두 열, `saveFleet`·`saveTeam` 의 `cols`(시연 흉내 포함). `guide/guide.js` 설명 한 줄.
+- 시험: `tests/test_equipment.py` `t_cols_saved`·`t_server_cols`(+ `t_round_ten_days` 를 `day1Of` 로), `tests/test_equipment_crew.py` download 가 `S.day1` 대신 저장된 지원일 1 을 씀, `tests/_sb_mock.py` p_cols·p_day1.
+- 같은 커밋: 기관별 장비 위 장비 현황 표 이름 "배정" → "배치", "배정지" → "세부내역"(사용자 요청, 속성 `data-fsrow="배정"` 은 그대로). 사용법 안내 단계 이름도.
+— ✍ Claude Code 작성
+
 ### 2026-11-11 · 커밋 (이 기록 커밋 하나) · 사용법 안내 버벅임: 흐림 효과 뺌
 - `guide/guide.css`: `.sg-dim`(화면 전체 3px)·`.sg-card`(16px) 의 backdrop-filter 뺌. 어둡게 덮기·칸 테두리·빛 고리·움직임은 그대로.
 - 잰 값(시험 서버·그래픽 가속 없는 브라우저, 1초에 그리는 횟수): 가운데 설명 12 → 60, 칸 짚는 설명 28 → 60. 흐림과 끝없이 움직이는 효과가 겹치면 매번 화면 전체를 다시 흐리게 계산해서였음.

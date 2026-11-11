@@ -189,6 +189,54 @@ def t_reset_button(p):
     check(ev(p, "S.routes.get(rk(todayISO(), 'V001'))") is not None, "확정 전에는 서버 값 그대로")
     p.click("#save-fleet [data-revert]"); p.wait_for_timeout(200); check(route(p, "V001", day(p, 0)) == ["대관령"], "되돌리기로 복구")
 
+def t_cols_saved(p):
+    """2026-11-11(94): 지원일 칸 수는 기준일자마다 저장 — 바꾸면 '확정하지 않은 변경', [확정]하면 모든 아이디가 그 칸 수.
+    기관별 장비 = 관리자만, 강원본부 지원장비 = 관리자·강원본부(강원본부는 기관별 장비 칸 수를 못 바꿈)"""
+    heads = lambda t="eqTable": p.locator(f"#{t} thead th.dayh").count()
+    state = lambda t: p.locator(f"#save-{t} .save-state").inner_text()
+    as_user(p, "admin1"); tab(p, "fleet")
+    check(heads() == 4 and p.input_value("#colsSel") == "4", "처음 4칸")
+    p.select_option("#colsSel", "6"); p.wait_for_timeout(200)
+    check(heads() == 6 and "지원일 칸 4개 → 6개" in state("fleet") and p.locator("#save-fleet [data-save]").is_enabled(), "바꾸면 확정하지 않은 변경: " + state("fleet"))
+    p.click("#save-fleet [data-revert]"); p.wait_for_timeout(200)
+    check(heads() == 4 and state("fleet") == "변경 사항 없음", "되돌리기 → 4칸: " + state("fleet"))
+    p.select_option("#colsSel", "6"); p.wait_for_timeout(150); confirm_fleet(p)
+    check("확정했습니다" in toast(p) and "지원일 칸 6개" in toast(p) and heads() == 6 and state("fleet") == "변경 사항 없음", toast(p))
+    for uid in ("eq-cb", "br2", "hq-gw"):
+        as_user(p, uid); tab(p, "fleet")
+        check(p.locator("#colsSel").count() == 0 and heads() == 6, f"{uid}: 고르기 없이 저장된 6칸")
+    tab(p, "gwteam"); check(p.locator("#colsSelTeam").count() == 1 and heads("teamTable") == 4, "강원본부: 지원장비 탭은 고를 수 있고 처음 4칸")
+    p.select_option("#colsSelTeam", "5"); p.wait_for_timeout(150)
+    check("지원일 칸 4개 → 5개" in state("gwteam") and "경로 0칸" not in state("gwteam"), state("gwteam"))
+    p.click("#save-gwteam [data-save]"); p.wait_for_timeout(300); check("확정했습니다" in toast(p) and heads("teamTable") == 5, toast(p))
+    tab(p, "fleet"); check(heads() == 6 and p.locator("#colsSel").count() == 0, "강원본부가 바꿔도 기관별 장비는 6칸 그대로, 고르기 없음")
+    check(ev(p, "Api.saveFleet([], [], S.round, [], 3).then(r => r.code)") == "42501", "강원본부: 기관별 장비 칸 수는 서버도 거절")
+    as_user(p, "eq-cb"); check(ev(p, "Api.saveTeam(S.round, [], [], 3).then(r => r.code)") == "42501", "기계화부: 지원장비 칸 수 거절")
+    as_user(p, "admin1"); tab(p, "gwteam"); check(heads("teamTable") == 5, "관리자도 지원장비 5칸")
+    tab(p, "log"); txt = p.locator("#logTable").inner_text()
+    check("기관별 장비 지원일 칸" in txt and "강원본부 지원장비 지원일 칸" in txt and "6칸" in txt, "수정 기록에 남음")
+    tab(p, "fleet"); p.select_option("#colsSel", "4"); p.wait_for_timeout(150); confirm_fleet(p)
+    tab(p, "gwteam"); p.select_option("#colsSelTeam", "4"); p.wait_for_timeout(150); p.click("#save-gwteam [data-save]"); p.wait_for_timeout(300)
+    check(ev(p, "[curRound().cols_equip, curRound().cols_team].join()") == "4,4", "4칸으로 되돌려 저장")
+    # 지원일 1(같은 방식): 바꾸면 확정하지 않은 변경, [확정]하면 모든 아이디가 그 날짜부터. 기준일자 기간 밖은 거절
+    st0, end = ev(p, "curRound().start_date"), ev(p, "roundEnd(curRound())"); d2 = ev(p, f"addDays('{st0}', 2)")
+    tab(p, "fleet"); p.fill("#day1In", d2); p.dispatch_event("#day1In", "change"); p.wait_for_timeout(250)
+    check(ev(p, "windowDates('equip')[0]") == d2 and "지원일 1 " in state("fleet") and p.locator("#save-fleet [data-save]").is_enabled(), "지원일 1 바꾸면 확정하지 않은 변경: " + state("fleet"))
+    p.click("#save-fleet [data-revert]"); p.wait_for_timeout(200); check(ev(p, "windowDates('equip')[0]") == st0 and state("fleet") == "변경 사항 없음", "되돌리기 → 첫날")
+    p.fill("#day1In", ev(p, f"addDays('{end}', 1)")); p.dispatch_event("#day1In", "change"); p.wait_for_timeout(250)
+    check("기간" in toast(p) and ev(p, "windowDates('equip')[0]") == st0 and state("fleet") == "변경 사항 없음", "기준일자 기간 뒤 날짜는 거절: " + toast(p))
+    p.fill("#day1In", d2); p.dispatch_event("#day1In", "change"); p.wait_for_timeout(250); confirm_fleet(p)
+    check("확정했습니다" in toast(p) and ev(p, "curRound().day1_equip") == d2 and state("fleet") == "변경 사항 없음", toast(p))
+    for uid in ("eq-cb", "hq-gw"):
+        as_user(p, uid); tab(p, "fleet")
+        check(p.locator("#day1In").count() == 0 and ev(p, "windowDates('equip')[0]") == d2, f"{uid}: 저장된 지원일 1부터")
+    tab(p, "gwteam"); check(ev(p, "windowDates('team')[0]") == st0 and p.locator("#day1InTeam").count() == 1, "강원본부 지원장비는 따로(아직 첫날)")
+    p.fill("#day1InTeam", ev(p, f"addDays('{st0}', 1)")); p.dispatch_event("#day1InTeam", "change"); p.wait_for_timeout(250)
+    check("지원일 1 " in state("gwteam"), state("gwteam")); p.click("#save-gwteam [data-save]"); p.wait_for_timeout(300)
+    check("확정했습니다" in toast(p) and ev(p, "curRound().day1_team") == ev(p, f"addDays('{st0}', 1)") and ev(p, "windowDates('equip')[0]") == d2, "강원본부: 지원장비 지원일 1만 바뀜")
+    check(ev(p, f"Api.saveFleet([], [], S.round, [], null, '{st0}').then(r => r.code)") == "42501", "강원본부: 기관별 장비 지원일 1은 서버도 거절")
+    as_user(p, "admin1"); tab(p, "log"); txt = p.locator("#logTable").inner_text(); check("기관별 장비 지원일 1" in txt and "강원본부 지원장비 지원일 1" in txt, "수정 기록에 남음")
+
 def t_permissions_equip_own(p):
     """지원장비(충북): 자기 기관 장비 추가·도공번호·지원 여부만. 경로·삭제·지원일 1·초기화는 관리자. 지사는 아무것도 못 고침"""
     as_user(p, "eq-cb"); tab(p, "fleet")
@@ -1251,7 +1299,7 @@ def t_fleet_sum(p):
     check(bg("#fleetSum thead th.tot") == "rgb(255, 243, 176)" and bg("#fleetSum tr[data-fsrow='지원'] td.tot") == "rgb(255, 243, 176)" and bg("#fleetSum tr[data-fsrow='지원'] td:not(.tot)") != "rgb(255, 243, 176)", "전체 칸 강조")
     check("이동정비차" not in p.locator("#orgGrid").inner_text(), "이동정비차 없음")
     rows = [x.replace("▾", "").replace("▴", "").strip() for x in p.locator("#fleetSum tbody tr > th").all_inner_texts()]
-    check(rows == ["지원", "배정"], f"행 = 지원 · 배정만(2026-11-04: 지원 불가·정비중·계 줄 없앰): {rows}")
+    check(rows == ["지원", "배치"], f"행 = 지원 · 배치만(2026-11-04: 지원 불가·정비중·계 줄 없앰, 2026-11-11 배정 → 배치): {rows}")
     cnt = lambda o, t, st: ev(p, f"(() => {{ const r = curRound(); return S.vehicles.filter(v => shownIn(v, r) && v.type === '{t}' && ({'true' if o is None else repr(o) + ' === v.org'}) && stOf(r.id, v.id).status === '{st}').length; }})()")
     c = lambda k: int(p.locator(f"#fleetSum [data-fs='{k}']").inner_text())
     for o in ("서울경기", "충북", "전북", "대구경북"):
@@ -1272,8 +1320,8 @@ def t_fleet_sum(p):
     check(lst("충북:제설기") == [f"{bs[0][1]} 1"] and lst("전체:제설차") == [f"{bs[0][1]} 3", f"{bs[1][1]} 1"], "칸마다 줄바꿈, 전체는 합")
     check(p.locator("#fleetSum [data-fsa='서울경기:제설차']").inner_text() == "3" and p.locator("#fleetSum [data-fsa='전체:제설차']").inner_text() == "4", "배정 대수 줄")
     # 접고 펴기: 배정 대수 줄은 그대로
-    tog = p.locator("#fleetSum tr[data-fsrow='배정'] th [data-fsopen]"); check(tog.get_attribute("aria-expanded") == "true" and "배정" in tog.inner_text() and "배정지" not in tog.inner_text(), "화살표는 배정 칸에")
-    check(p.locator("#fleetSum tr.fs-asg th").inner_text() == "배정지", "펴면 배정지 줄이 나타남")
+    tog = p.locator("#fleetSum tr[data-fsrow='배정'] th [data-fsopen]"); check(tog.get_attribute("aria-expanded") == "true" and "배치" in tog.inner_text() and "세부내역" not in tog.inner_text() and "배정" not in tog.inner_text(), "화살표는 배치 칸에(2026-11-11 이름 배정 → 배치)")
+    check(p.locator("#fleetSum tr.fs-asg th").inner_text() == "세부내역", "펴면 세부내역 줄이 나타남(2026-11-11 이름 배정지 → 세부내역)")
     tog.click(); p.wait_for_timeout(100)
     check(p.locator("#fleetSum [data-fsl]").count() == 0 and p.locator("#fleetSum [data-fsopen]").get_attribute("aria-expanded") == "false" and p.locator("#fleetSum [data-fsa='서울경기:제설차']").inner_text() == "3", "접으면 지사 줄만 사라짐")
     ev(p, "refresh()"); p.wait_for_timeout(100); check(p.locator("#fleetSum [data-fsl]").count() == 0 and p.locator("#fleetSum tr.fs-asg").count() == 0, "다시 그려도 접힌 그대로, 배정지 줄 자체가 없음")
@@ -1498,8 +1546,8 @@ def t_move_compact(p):
 def t_round_ten_days(p):
     """2026-11-03: 기준일자 기간 10일 — 지원일 10칸까지 잠기지 않음, 명칭 '기관별 배치'"""
     tab(p, "fleet"); ev(p, "(S.rounds.forEach(r => r.days = 10), refresh())"); p.select_option("#colsSel", "10"); p.wait_for_timeout(300)
-    check(ev(p, "curRound().days") == 10 and ev(p, "addDays(S.day1, 9) <= roundEnd(curRound())"), "기간 10일")
-    v = ev(p, "fleetRows().find(v => !v.home_branch && stOf(S.round, v.id).status === 'O').id"); d = ev(p, "addDays(S.day1, 9)")
+    check(ev(p, "curRound().days") == 10 and ev(p, "addDays(day1Of('equip'), 9) <= roundEnd(curRound())"), "기간 10일")
+    v = ev(p, "fleetRows().find(v => !v.home_branch && stOf(S.round, v.id).status === 'O').id"); d = ev(p, "addDays(day1Of('equip'), 9)")
     check(p.locator(f"td[data-cell='{d}|{v}'] select").count() >= 1 and p.locator(f"td[data-cell='{d}|{v}'] .slot.locked").count() == 0, "지원일 10도 지정 가능")
     p.select_option("#colsSel", "4"); p.wait_for_timeout(200)
     check(p.locator("[data-tab=alloc]").first.inner_text().strip() == "기관별 배치", "탭 이름")
@@ -1783,7 +1831,7 @@ def t_route_perm_admin_only(p):
     check("권한이 없습니다" in toast(p), "화면을 우회해 다른 기관 경로를 보내도 거절: " + toast(p))
     as_user(p, "admin1"); tab(p, "fleet"); check(p.locator("#eqTable select[data-rv]").count() > 0 and p.locator("#day1In").count() == 1, "관리자는 지원일 칸 전부")
 
-TESTS = [t_route_revisit_and_order, t_route_perm_admin_only, t_gw_team, t_branch_two_tables, t_branch_compact, t_fixed_columns, t_reqs_read_fail, t_confirm_stale, t_fleet_sum, t_tables_sizes, t_fleet_sum_fixed, t_no_hscroll_real_bars, t_table_look, t_branch_names_sticky, t_first_col_fixed_opaque, t_move_compact, t_round_ten_days, t_alloc_fixed_only, t_branch_totals, t_removed_hints, t_branch_bulk_save, t_hq_bulk_marks_branch_saved, t_report, t_report_snow_warning, t_back_button, t_branch_saved, t_alloc_follow_assign, t_pool_round_delete, t_fleet_only_go, t_pool_vehicles, t_reload, t_allocation, t_moves_between_branches, t_round_status_rules, t_hide_vehicle, t_views_and_choices_after_confirm_all, t_confirm_all_by_hq, t_confirmed_row_locked, t_weather_manual, t_load, t_move_hierarchy, t_dest_order_and_day_tag, t_route_choices_confirmed_only, t_confirm_keeps_history, t_day1_header_and_columns,
+TESTS = [t_cols_saved, t_route_revisit_and_order, t_route_perm_admin_only, t_gw_team, t_branch_two_tables, t_branch_compact, t_fixed_columns, t_reqs_read_fail, t_confirm_stale, t_fleet_sum, t_tables_sizes, t_fleet_sum_fixed, t_no_hscroll_real_bars, t_table_look, t_branch_names_sticky, t_first_col_fixed_opaque, t_move_compact, t_round_ten_days, t_alloc_fixed_only, t_branch_totals, t_removed_hints, t_branch_bulk_save, t_hq_bulk_marks_branch_saved, t_report, t_report_snow_warning, t_back_button, t_branch_saved, t_alloc_follow_assign, t_pool_round_delete, t_fleet_only_go, t_pool_vehicles, t_reload, t_allocation, t_moves_between_branches, t_round_status_rules, t_hide_vehicle, t_views_and_choices_after_confirm_all, t_confirm_all_by_hq, t_confirmed_row_locked, t_weather_manual, t_load, t_move_hierarchy, t_dest_order_and_day_tag, t_route_choices_confirmed_only, t_confirm_keeps_history, t_day1_header_and_columns,
          t_multi_stop_add_and_delete, t_status_maintenance, t_reset_button, t_permissions_equip_own, t_branch_permissions, t_branch_save_confirm_and_arrive,
          t_round_create, t_history_tooltip_per_cell, t_log_tab, t_plate_edit, t_vehicle_add_delete, t_dest_layout_and_jump, t_link_numbers_no_underline_hover_bg, t_fleet_sort_blower_delete, t_fleet_header_stays_on_top, t_theme_toggle,
          t_unsaved_guard_on_user_switch, t_xss_text_is_escaped, t_no_driver_info_anywhere,
@@ -1896,7 +1944,22 @@ def t_server_forecast_if_changed(b):
     check(full() == f0 + 1 and ev(p, "S.fc.B019.max_snow_24h") == 12.3 and ev(p, "S.fcStamp") == "2099-01-01T00:00:00+00:00", f"바뀌었으면 다시 받음: {m.bf_selects}")
     p.close()
 
-SERVER_TESTS = [t_server_many_vehicles, t_server_equip_confirm, t_server_branch_save, t_server_warning, t_server_lock_and_confirm_all, t_server_forecast_if_changed]
+def t_server_cols(b):
+    """2026-11-11(94): 서버 모드 — 지원일 칸 수는 save_fleet 의 p_cols 로 [확정]과 함께(칸 수만 바꿔도 됨). 다른 아이디는 저장된 칸 수"""
+    m = Mock(); p = server_page(b, m, "admin-01"); tab(p, "fleet")
+    p.select_option("#colsSel", "7"); p.wait_for_timeout(200); confirm_fleet(p)
+    call = [c for c in m.eq_calls if c[0] == "save_fleet"][-1][1]
+    check(call.get("p_cols") == 7 and call["p_routes"] == [] and call["p_status"] == [] and call["p_vehicles"] == [] and m.rounds[0]["cols_equip"] == 7, f"칸 수만 바꾼 확정: {call}")
+    d2 = ev(p, "addDays(curRound().start_date, 1)"); p.fill("#day1In", d2); p.dispatch_event("#day1In", "change"); p.wait_for_timeout(250); confirm_fleet(p)
+    call = [c for c in m.eq_calls if c[0] == "save_fleet"][-1][1]
+    check(call.get("p_day1") == d2 and "p_cols" not in call and m.rounds[0]["day1_equip"] == d2, f"지원일 1만 바꾼 확정: {call}")
+    p.close()
+    p = server_page(b, m, "equip-01"); tab(p, "fleet")
+    check(p.locator("#colsSel").count() == 0 and p.locator("#eqTable thead th.dayh").count() == 7 and ev(p, "windowDates('equip')[0]") == d2, "기계화부 아이디: 저장된 7칸·지원일 1")
+    check(ev(p, f"Api.saveFleet([], [], S.round, [], 5).then(r => r.code)") == "42501", "기계화부: 칸 수 저장 거절")
+    p.close()
+
+SERVER_TESTS = [t_server_cols, t_server_many_vehicles, t_server_equip_confirm, t_server_branch_save, t_server_warning, t_server_lock_and_confirm_all, t_server_forecast_if_changed]
 
 if __name__ == "__main__":
     only = sys.argv[1:]
