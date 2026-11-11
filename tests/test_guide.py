@@ -177,9 +177,9 @@ def t_element_steps(b, ctx, m):
     p.click(".page-btn[data-page=equip]"); wait_open(p, "equip"); p.click("#sgStop"); wait_closed(p)
     p.click(".eq-btn[data-eqtab=fleet]"); wait_open(p, "equip")
     go_to(p, "지원 여부", "fleet")
-    fr = p.frame_locator("#equipFrame"); box = fr.locator("#eqTable select[data-vs]").first.bounding_box()
-    ring_on(p, box, "기관별 장비의 지원 여부 드롭다운(안쪽 틀)")
-    check("지원 · 빈칸" in p.locator(".sg-card").inner_text() and "정비중" not in p.locator(".sg-card").inner_text() and "미정" not in p.locator(".sg-card").inner_text(), "지원 여부 고르는 곳 설명(지원 · 빈칸만)")
+    fr = p.frame_locator("#equipFrame"); box = fr.locator("#eqTable button[data-vs]").first.bounding_box()
+    ring_on(p, box, "기관별 장비의 [지원] 단추(안쪽 틀)")
+    check("지원 · 다시 누름 → 빈칸" in p.locator(".sg-card").inner_text() and "정비중" not in p.locator(".sg-card").inner_text() and "미정" not in p.locator(".sg-card").inner_text(), "지원 여부 고르는 곳 설명(지원 · 빈칸만)")
     check(p.locator(".eq-btn.active").get_attribute("data-eqtab") == "fleet", "그 탭 화면")
     p.keyboard.press("ArrowLeft"); p.wait_for_timeout(700); check(guide(p)["tab"] == "fleet" and guide(p)["el"], "← 이전 칸")
     # 지사 계정: 화면에 없는 [삭제]·[만들기]는 건너뜀

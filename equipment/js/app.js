@@ -43,8 +43,8 @@ const isPool = v => !!v && v.org === POOL;
 const TEAM = "강원 신속대응팀";                         // 강원본부 지원장비(마이그레이션 48)의 기관 이름 — 서버에는 기관이 아니고 따로 된 표(gw_team)
 const isTeam = v => !!v && v.org === TEAM;
 const STATUS = { "": ["wait", ""], O: ["go", "지원"] };     // 지원 여부 = 지원 또는 빈칸(2026-11-04 사용자 결정: 지원 불가·정비중 없앰, 서버 마이그레이션 66도 이 둘만 받음)
-// 지원 여부 드롭다운: 빈칸 · 지원(빈칸으로 되돌릴 수 있음)
-const statusOpts = (vid, st) => Object.keys(STATUS).map(k => `<option value="${k}" ${st === k ? "selected" : ""}>${STATUS[k][1]}</option>`).join("");
+// 지원 여부 [지원] 단추(2026-11-11 사용자 요청, 기관별 장비·강원본부 지원장비): 누르면 지원, 다시 누르면 빈칸 — 빈칸이면 그 줄은 흐리고 잠김
+const goToggle = (v, st) => `<button type="button" class="go-tog" data-vs="${esc(v.id)}" data-fk="vs:${esc(v.id)}" aria-pressed="${st === "O"}" aria-label="${esc(vname(v))} 지원" title="누르면 지원 · 다시 누르면 빈칸"${S.sdraft.has(v.id) ? ' data-changed="1"' : ""}>지원</button>`;
 const WD = "일월화수목금토";
 const todayISO = () => { const t = new Date(); return `${t.getFullYear()}-${p2(t.getMonth() + 1)}-${p2(t.getDate())}`; };
 function addDays(iso, n) { const [y, m, d] = iso.split("-").map(Number); const t = new Date(y, m - 1, d + n); return `${t.getFullYear()}-${p2(t.getMonth() + 1)}-${p2(t.getDate())}`; }
@@ -768,7 +768,7 @@ function fleetRowHtml(v, dates, choices, all) {
     if (isPool(v)) return poolRowHtml(v, dates, choices);
     const ed = canVeh(v), r = curRound(), st = r ? stOf(r.id, v.id).status : "", [cls, label] = STATUS[st] || STATUS[""], tv = "vehicles:" + v.id;
     // 지원 여부 = 고른 기준일자의 값(기준일자가 바뀌면 따로). 기준일자가 없으면 고칠 수 없음
-    const statusCell = ed && r ? `<select class="ci" data-vs="${esc(v.id)}" data-fk="vs:${esc(v.id)}" aria-label="${esc(vname(v))} 지원 여부"${S.sdraft.has(v.id) ? ' data-changed="1"' : ""}>${statusOpts(v.id, st)}</select>`
+    const statusCell = ed && r ? goToggle(v, st)
       : r ? (label ? `<span class="status ${cls}">${label}</span>` : "") : '<span class="muted">-</span>';
     const old = !plateNum(v) && vval(v, "plate");      // 예전 차량번호 형식이 남은 장비: 숫자를 새로 넣어야 함
     const plateCell = ed ? `<span class="pnum"${hvA(tv, "plate")}><span class="pfx">${esc(v.org)}</span><input class="ci" inputmode="numeric" maxlength="4" data-vp="${esc(v.id)}" data-fk="vp:${esc(v.id)}" value="${esc(plateNum(v))}" placeholder="901" aria-label="도공번호 숫자"><span class="sfx">호</span></span>${old ? `<div class="muted sm">예전 번호 ${esc(old)}</div>` : ""}`
@@ -973,7 +973,7 @@ function renderTeam() {
 }
 function teamRowHtml(v, dates) {
   const ed = canTeam(), r = curRound(), st = r ? stOf(r.id, v.id).status : "", [cls, label] = STATUS[st] || STATUS[""], id = esc(v.id);
-  const statusCell = ed && r ? `<select class="ci" data-vs="${id}" data-fk="vs:${id}" aria-label="${esc(vname(v))} 지원 여부">${statusOpts(v.id, st)}</select>`
+  const statusCell = ed && r ? goToggle(v, st)
     : r ? (label ? `<span class="status ${cls}">${label}</span>` : "") : '<span class="muted">-</span>';
   return `<tr class="${S.sdraft.has(v.id) ? "changed" : ""}" data-vrow="${id}"><td><span class="plate">${esc(v.name)}</span> <span class="muted sm">제설차</span></td><td>${statusCell}</td>` +
     dates.map(d => `<td data-cell="${esc(rk(d, v.id))}">${slotCell(v, d, ed, null)}</td>`).join("") + `</tr>`;
@@ -1686,10 +1686,6 @@ document.addEventListener("change", async e => {
     S.revisedMode = t.id === "modeRev" ? t.checked : !t.checked; return renderFleet();
   }
   if(t.dataset.crewcode && crewPick) { const code=t.dataset.crewcode; crewPick.crew=t.checked?crewPick.crew.concat(code):crewPick.crew.filter(c=>c!==code); renderCrewPicker(); const item=sheet.querySelector(`[data-crewcode="${CSS.escape(code)}"]`);if(item)item.focus();return; }
-  if (t.dataset.vs) {                       // 지원 여부(고른 기준일자): 지원이 아니면 그 기준일자가 맡은 날의 경로는 숨겨짐(지우지 않음 — 다시 지원으로 하면 보임)
-    const v = vehById(t.dataset.vs); if (!v || !canVeh(v) || !S.round) return refresh();
-    setStat(v.id, { status: t.value }); return patchVehicle(v.id);
-  }
   if (t.dataset.vb) {                       // 블로워 소·대: 제설기만, 둘 다 꺼도 됨
     const v = vehById(t.dataset.vb); if (!v || !canVeh(v) || v.type !== "제설기") return refresh();
     setVeh(v.id, t.dataset.bf, t.checked); return patchVehicle(v.id);
@@ -1744,6 +1740,10 @@ document.addEventListener("click", e => {
   if (c("[data-reload]")) return reloadAll();
   if ((x = c("[data-save]"))) return x.dataset.save === "fleet" ? confirmFleet() : x.dataset.save === "gwteam" ? confirmTeam() : x.dataset.save === "alloc" ? saveAlloc() : saveBranch();
   if ((x = c("[data-revert]"))) { if (!confirm("확정·저장하지 않은 변경을 모두 취소할까요?")) return; if (x.dataset.revert === "fleet") clearDrafts(false); else if (x.dataset.revert === "gwteam") clearDrafts(true); else if (x.dataset.revert === "alloc") S.adraft.clear(); else S.rdraft.clear(); return refresh(); }
+  if ((x = c("button[data-vs]"))) {          // [지원] 단추(기관별 장비·강원본부 지원장비): 지원 ↔ 빈칸(고른 기준일자). 빈칸이면 그 기준일자가 맡은 날의 경로는 숨겨짐(지우지 않음)
+    const v = vehById(x.dataset.vs); if (!v || !canVeh(v) || !S.round) return refresh();
+    setStat(v.id, { status: stOf(S.round, v.id).status === "O" ? "" : "O" }); return patchVehicle(v.id);
+  }
   if((x=c("[data-crew]")))return openCrew(x.dataset.crew);
   if((x=c("[data-crewtab]"))&&crewPick){crewPick.tab=x.dataset.crewtab;renderCrewPicker();return;}
   if(c("[data-crewclear]")&&crewPick){crewPick.crew=[];return renderCrewPicker();}
