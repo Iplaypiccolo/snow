@@ -39,25 +39,33 @@ test('강수확률: 3시간 중 비가 있으면 최고(날씨누리 102,100 11/
 test('강수 강도: 3시간 중 가장 센 값. ~1mm(양 0·강수형태 있음)는 약한비, 3mm 보통비, 15mm 강한비',()=>{
   const one=(p,pq)=>combine(sample('2026-11-10T01:00:00',0,(d,at)=>{set(d,at,2,'p',p);set(d,at,2,'pq',pq);}))[0].pcp_code;
   assert.deepEqual([one(0,0),one(0,1),one(1,0),one(2.9,0),one(3,0),one(14.9,0),one(15,0)],[0,1,1,1,2,2,3]);
-  assert.deepEqual([0,1,2,3].map(c=>intensity(c,false)),['','약한비','보통비','강한비']);
+  assert.deepEqual([0,1,2,3].map(c=>intensity(c,false)),['-','약한비','보통비','강한비']);      // 0(없음)도 '-'(2026-11-11 날씨누리처럼)
 });
 test('신적설 강도: ~1cm 는 보통 눈(1cm 미만), 1cm 이상 많은 눈',()=>{
   const one=(s,sq)=>combine(sample('2026-11-10T01:00:00',0,(d,at)=>{set(d,at,1,'s',s);set(d,at,1,'sq',sq);}))[0].snow_code;
   assert.deepEqual([one(0,0),one(0,1),one(1,0),one(3,0)],[0,1,2,2]);
-  assert.deepEqual([0,1,2].map(c=>intensity(c,true)),['','보통 눈','많은 눈']);
+  assert.deepEqual([0,1,2].map(c=>intensity(c,true)),['-','보통 눈','많은 눈']);
 });
 test('눈만 와도 강수확률은 최고(비·눈이 있는 칸)',()=>{
   const d=sample('2026-11-10T01:00:00',0,(d,at)=>{[10,40,20].forEach((v,i)=>set(d,at,i,'r',v));set(d,at,0,'sq',1);});
   assert.equal(combine(d)[0].pop,40);
 });
-test('기상청이 양 대신 등급만 주는 먼 시각: 그 등급 그대로, 같은 칸의 양과 섞이면 더 센 쪽',()=>{
+test('기상청이 양 대신 등급만 주는 먼 시각: 그 칸 시각의 등급·확률(날씨누리 3시간, 2026-11-11 312칸 대조), 양과 섞인 칸은 더 센 쪽',()=>{
   const d=sample('2026-11-09T21:00:00',30,(d,at)=>{
-    for(let i=27;i<54;i++){set(d,at,i,'p',null);set(d,at,i,'s',null);set(d,at,i,'pq',null);set(d,at,i,'sq',null);set(d,at,i,'pc',0);set(d,at,i,'sc',0);}
-    set(d,at,52,'pc',3);set(d,at,53,'sc',2);set(d,at,26,'p',4);});
-  const bs=combine(d),last=bs.at(-1);
-  assert.equal(last.pcp_code,3);assert.equal(last.snow_code,2);assert.equal(intensity(last.snow_code,true),'많은 눈');
-  const mixed=bs.find(b=>Date.parse(b.first_at)<=Date.parse(d.upper.start_at)+26*H&&Date.parse(b.last_at)>=Date.parse(d.upper.start_at)+27*H);
-  assert.equal(mixed.pcp_code,2);      // 양 4mm(보통비) + 등급 0 이 같은 칸
+    for(let i=27;i<54;i++){set(d,at,i,'p',null);set(d,at,i,'s',null);set(d,at,i,'pq',null);set(d,at,i,'sq',null);set(d,at,i,'pc',0);set(d,at,i,'sc',0);set(d,at,i,'r',30);}
+    set(d,at,50,'pc',3);set(d,at,50,'r',60);set(d,at,51,'sc',2);set(d,at,51,'r',70);set(d,at,26,'p',4);});
+  const bs=combine(d),st=Date.parse(d.upper.start_at),b51=bs.find(b=>b.slot_at===new Date(st+51*H).toISOString());      // 51번째 = 00시(그 칸 시각)
+  assert.equal(b51.pcp_code,0);assert.equal(b51.snow_code,2);assert.equal(b51.pop,70);assert.equal(intensity(b51.snow_code,true),'많은 눈');   // 50번째(앞 시각)의 강한비·60%는 안 씀
+  const last=bs.at(-1);assert.equal(last.hours,2);assert.equal(last.pop,30);      // 끝의 짧은 칸(그 칸 시각 없음)은 예전 규칙
+  const mixed=bs.find(b=>Date.parse(b.first_at)<=st+26*H&&Date.parse(b.last_at)>=st+27*H);
+  assert.equal(mixed.pcp_code,2);      // 양 4mm(보통비) + 등급 0 이 같은 칸(양이 섞이면 예전대로 가장 센 쪽)
+});
+test('먼 시각 확률: 앞 시각에만 비가 있으면 칸은 비 없음·그 시각 확률(공주 14일 02시 비 → 03시 칸 30%)',()=>{
+  const d=sample('2026-11-09T21:00:00',30,(d,at)=>{
+    for(let i=24;i<54;i++){set(d,at,i,'p',null);set(d,at,i,'s',null);set(d,at,i,'pq',null);set(d,at,i,'sq',null);set(d,at,i,'pc',0);set(d,at,i,'sc',0);set(d,at,i,'r',30);}
+    set(d,at,28,'pc',1);set(d,at,28,'r',60);});
+  const b=combine(d).find(x=>x.slot_at===new Date(Date.parse(d.upper.start_at)+30*H).toISOString());
+  assert.equal(b.pcp_code,0);assert.equal(b.pop,30);assert.equal(intensity(b.pcp_code,false),'-');
 });
 test('모르는 등급·빠진 시각은 0 으로 만들지 않음(모두 모르면 -)',()=>{
   const d=sample('2026-11-09T21:00:00',3,(d,at)=>{for(let i=24;i<27;i++){set(d,at,i,'p',null);set(d,at,i,'pq',null);set(d,at,i,'pc',i===24?9:null);}});

@@ -19,7 +19,7 @@
     periods.forEach(function(p){var h=new Date(Date.parse(p.forecast_at)+9*3600000).getUTCHours();if(p.period_hours===24)a=[p,p];else if(h===0||h===12)a[h===0?0:1]=p;});return a;
   }
   function table(data){
-    var days=(data.days||[]).slice(0,7),html='<div class="fc-scroll" tabindex="0" aria-label="일별 예보 가로 스크롤"><table class="fc-daily-table"><thead><tr><th rowspan="2" class="lb">일별</th>';
+    var days=(data.days||[]).slice(0,11),      /* 2026-11-11 사용자: 날씨누리처럼 오늘부터 11일(8~10일 뒤는 하루 한 칸) */html='<div class="fc-scroll" tabindex="0" aria-label="일별 예보 가로 스크롤"><table class="fc-daily-table"><thead><tr><th rowspan="2" class="lb">일별</th>';
     days.forEach(function(day,di){var d=new Date(day.date+'T00:00:00Z'),w=d.getUTCDay();html+='<th colspan="2" class="'+(w===0?'fc-sun':w===6?'fc-sat':'')+(di?' dl':'')+'">'+(d.getUTCMonth()+1)+'/'+d.getUTCDate()+'('+'일월화수목금토'[w]+')</th>';});
     html+='</tr><tr>';days.forEach(function(day,di){var h=halves(day),dl=di?' class="dl"':'';html+=h[0]&&h[0]===h[1]?'<th colspan="2"'+dl+'>하루</th>':'<th'+dl+'>오전</th><th>오후</th>';});html+='</tr></thead><tbody>';
     ['weather','temperature','pop'].forEach(function(row){

@@ -46,7 +46,7 @@
     B1: { who: '기계화부 · 지사', title: '지원 가능 대수 확인', sub: ['기계화부: 장비 지원 여부', '지사: 타지사 지원 가능 대수'], tab: '기관별 장비 · 요청·편성', c: 'te', roles: ['equip', 'branch', 'hq', 'gw'] },
     M: { who: '교통처', title: '배정', sub: ['어느 기관이', '어느 지사에 몇 대'], tab: '기관별 배치', c: 'bl', roles: ['admin'], merge: true },
     N: { who: '기계화부', title: '장비 지정 · 도착 시간', sub: ['보낼 장비 ·', '도착 예상 시각'], tab: '기관별 장비', c: 'te', roles: ['equip'] },
-    E: { who: '모든 계정', title: '이동 현황', sub: ['어디로 몇 대가', '언제 도착하는지'], tab: '이동 현황', c: 'em' },
+    E: { who: '모든 계정', title: '장비 지원현황', sub: ['어디로 몇 대가', '언제 도착하는지'], tab: '장비 지원현황', c: 'em' },
     G: { who: '강원본부', title: '강원 신속대응팀 직접 지원', sub: ['요청·승인·배정과 상관없이 보냄', '제설차 4대 (원주·양양·대관령·강릉)'], tab: '강원본부 지원장비', c: 'am', roles: ['gw'], dashed: true }
   };
   var LAYOUT = {
@@ -212,7 +212,7 @@
     var steps = [
       { center: true, wide: true, kicker: 'PROCESS', title: '장비 지원 절차', html: processHtml() },
       // 이동 현황
-      { tab: 'move', title: '이동 현황', desc: '날짜별로 어느 기관 장비가 어느 지사로 가는지 확인' },
+      { tab: 'move', title: '장비 지원현황', desc: '날짜별로 어느 기관 장비가 어느 지사로 가는지 확인' },
       E('move', '날짜', [both(['#prevDay', '#dateText', '#nextDay'])], '‹ › 하루씩 이동 · 날짜 클릭 → 달력'),
       E('move', '요약 · 기준 시각', ['#summaryNote'], '그날 지원 대수 · 기준 시각', ['최신 자료는 위쪽 [새로고침]']),
       E('move', '강원 신속대응팀', ['.team-tg'], '체크 해제 → 표 · 카드에서 빠짐'),
@@ -301,7 +301,7 @@
   function tabBtn(page, name) { return doc.querySelector(page === 'equip' ? '.eq-btn[data-eqtab="' + name + '"]' : '.tab-btn[data-tab="' + name + '"]'); }
   function fdoc() { var f = $('equipFrame'); try { return f && f.getAttribute('src') && f.contentDocument && f.contentDocument.readyState !== 'loading' ? f.contentDocument : null; } catch (e) { return null; } }
   var TABNAME = { forecast: '기관별 예보', snowtable: '연도별 신적설', map: '관측소 지도', jurisdiction: '기관별 관할 고속도로', sources: '데이터 출처', grid: '예보 격자 편입',
-    move: '이동 현황', branch: '지사별 요청·편성', fleet: '기관별 장비', alloc: '기관별 배치', gwteam: '강원본부 지원장비', log: '로그 기록' };
+    move: '장비 지원현황', branch: '지사별 요청·편성', fleet: '기관별 장비', alloc: '기관별 배치', gwteam: '강원본부 지원장비', log: '로그 기록' };
 
   // 단계의 칸 찾기 → { els, item }
   function resolve(s) {

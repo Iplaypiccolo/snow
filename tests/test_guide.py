@@ -96,14 +96,14 @@ def t_first_login_admin(b, ctx, m):
     p.click(".page-btn[data-page=equip]"); wait_open(p, "equip")
     card = p.locator(".sg-card").inner_text()
     check(guide(p)["title"] == "장비 지원 절차" and p.locator(".sg-card svg.sg-flow").count() == 2, "장비 지원 첫 장 = 지원 과정 그림")
-    for x in ["지사", "재난처", "교통처", "기계화부", "이동 현황", "강원본부 신속대응팀", "차량번호 · 운전원 인적사항", "내부망 별도 송부"]: check(x in card, f"지원 과정에 '{x}' 없음")
+    for x in ["지사", "재난처", "교통처", "기계화부", "장비 지원현황", "강원본부 신속대응팀", "차량번호 · 운전원 인적사항", "내부망 별도 송부"]: check(x in card, f"지원 과정에 '{x}' 없음")
     svg = p.locator(".sg-flow.h").text_content()
     for x in ["지원 요청", "승인", "지원 가능 대수 확인", "배정", "장비 지정 · 도착 시간", "강원 신속대응팀 직접 지원"]: check(x in svg, f"그림에 '{x}' 없음")
     check(p.locator(".sg-flow.h .sg-node.merge").count() == 1 and "교통처" in p.locator(".sg-flow.h .sg-node.merge").text_content(), "합쳐지는 곳 = 교통처 배정")
     t = titles(p)
-    check(t[1] == "이동 현황" and not any("계정별" in x for x in t), f"그림 다음은 바로 탭 설명: {t}")
+    check(t[1] == "장비 지원현황" and not any("계정별" in x for x in t), f"그림 다음은 바로 탭 설명: {t}")
     check(t.index("로그 기록") < t.index("날짜") and "지원 여부" not in t and "지사 요청" not in t, f"탭 소개 다음 이동 현황 칸 설명만: {t}")
-    for x in ["이동 현황", "지사별 요청·편성", "기관별 장비", "기관별 배치", "강원본부 지원장비", "로그 기록"]: check(x in t, f"관리자 장비 안내에 '{x}' 없음: {t}")
+    for x in ["장비 지원현황", "지사별 요청·편성", "기관별 장비", "기관별 배치", "강원본부 지원장비", "로그 기록"]: check(x in t, f"관리자 장비 안내에 '{x}' 없음: {t}")
     wait_closed(p); check(p.locator(".eq-btn.active").get_attribute("data-eqtab") == "move", "장비 지원도 보던 탭(이동 현황)으로")
     # 다시 들어와도 저절로 안 열림 / [사용법]으로 다시 봄
     p.reload(); p.wait_for_selector("body.authed", timeout=20000); wait_js(p, "!!document.getElementById('sgHelp')"); p.wait_for_timeout(1500)
@@ -279,7 +279,7 @@ def t_help_and_who(b, ctx, m):
     go_to(p, "＋ 지사 추가", "fleet"); check(who() == ["관리자"], f"하루 여러 지사 = 관리자: {who()}")
     p.click("#sgStop"); wait_closed(p)
     p.click(".eq-btn[data-eqtab=move]"); p.wait_for_timeout(300); p.click("#sgHelp"); wait_open(p, "equip")
-    t = titles(p); check("필터" not in t and "이동 현황" not in t and "날짜" in t, f"이동 현황: 필터 안내 없음, [사용법]은 탭 소개 없음: {t}")
+    t = titles(p); check("필터" not in t and "장비 지원현황" not in t and "날짜" in t, f"장비 지원현황: 필터 안내 없음, [사용법]은 탭 소개 없음: {t}")
 
 def t_back_button_tabs(b, ctx, m):
     """2026-11-02: 첫 화면의 뒤로가기 = 이전 탭(강설량 측정 탭 ↔ 장비 지원 ↔ 장비 지원 탭). 사이트를 떠나지 않음"""

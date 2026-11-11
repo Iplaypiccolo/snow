@@ -69,7 +69,7 @@
     const team = moves.filter(m => isTeam(m.v)).length, sum = a => a.reduce((n, x) => n + x.n, 0);
     const notes = [];
     if (mech.length) notes.push(`기계화부 ${sum(mech)}대(${mech.map(x => `${x.o} ${x.n}`).join(", ")})`);
-    if (pool.length) notes.push(`지역본부 ${sum(pool)}대(${pool.map(x => `${x.o} ${x.n}대`).join(", ")})`);
+    if (pool.length) notes.push(`지역본부 ${sum(pool)}대(${pool.map(x => `${x.o} ${x.n}`).join(", ")})`);      // 2026-11-11 사용자: 괄호 안은 '대' 없이(기계화부와 같게)
     if (team) notes.push(`${TEAM} ${team}대`);
     return { date: d, total: moves.length, trucks, blowers, branches: groups.reduce((n, g) => n + g.rows.length, 0), groups, notes };
   }
@@ -94,8 +94,7 @@
   function openPreview() {
     const M = model(S.date);
     sheet.classList.add("wide");
-    sheet.innerHTML = `<button type="button" class="sheet-close" id="sheetClose">닫기</button><h2 id="sheetTitle">1쪽 보고서 미리 보기</h2>
-      <p class="hint">이동 현황 ${esc(fmtMD(S.date))} 자료(지금 화면의 신속대응팀 체크 그대로). 워드 파일과 같은 내용입니다.</p>
+    sheet.innerHTML = `<button type="button" class="sheet-close" id="sheetClose">닫기</button><h2 id="sheetTitle" class="sr-only">1쪽 보고서</h2>
       <p><button type="button" class="btn primary" id="rptDocIn">Word 받기</button></p><div class="rp-wrap" id="rpWrap">${html(M)}</div>`;
     sheet.hidden = false; backdrop.hidden = false; fitPage();
     $("sheetClose").focus(); $("sheetClose").onclick = () => { sheet.classList.remove("wide"); closeSheet(); };

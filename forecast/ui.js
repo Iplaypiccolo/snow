@@ -49,7 +49,7 @@
     var k = G.cellCorners(g.cells[0][0], g.cells[0][1]), a = S.map.latLngToLayerPoint(L.latLng(k[0])), b = S.map.latLngToLayerPoint(L.latLng(k[2]));
     return Math.min(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
   }
-  function fitLines(px) { return px < 34 ? 0 : Math.max(1, Math.min(4, Math.floor((px - 10) / 15))); }
+  function fitLines(px) { return px < 34 ? 0 : Math.max(1, Math.min(5, Math.floor((px - 10) / 15))); }      // 2026-11-11 사용자: 고를 수 있는 값이 5개라 크면 5줄까지
 
   function st() { return S.state; }
   function bname(id) { var b = st().branches[id]; return b ? b.name : id; }
@@ -122,7 +122,7 @@
   function hourAt(start, i) { var d = start ? new Date(Date.parse(start) + i * 3600e3) : null; return d && !isNaN(d) ? d : null; }
   function hourLabel(start, i) { var d = hourAt(start, i); return d ? p2(d.getHours()) + '시' : ''; }
   function cellPop(v) { return v == null ? '<td class="z">-</td>' : v === 0 ? '<td class="z">0</td>' : '<td class="v">' + pct(v) + '</td>'; }
-  function cellNum(v, tc) { if (v == null) return '<td class="z">-</td>'; if (tc) return '<td class="v tr">' + rng(v, v + tc) + '</td>'; return v === 0 ? '<td class="z"></td>' : '<td class="v">' + num(v) + '</td>'; }      // tc = 그 칸의 '~1' 시각 수
+  function cellNum(v, tc) { if (v == null) return '<td class="z">-</td>'; if (tc) return '<td class="v tr">' + rng(v, v + tc) + '</td>'; return v === 0 ? '<td class="z">-</td>' : '<td class="v">' + num(v) + '</td>'; }      // tc = 그 칸의 '~1' 시각 수. 2026-11-11: 없음도 날씨누리처럼 '-'
   function cellHum(v) { return v == null ? '<td class="z">-</td>' : '<td class="v">' + Math.round(v) + '</td>'; }      // 85: 습도(%)
   function cellTmp(v) { return v == null ? '<td class="z">-</td>' : '<td class="v' + (v < 0 ? ' neg' : '') + '">' + tmp(v) + '</td>'; }
   function forecastHeader(slots, hourly, label) {

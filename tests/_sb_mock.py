@@ -296,8 +296,10 @@ class Mock:
                 c = next((c for c in self.fc_cells if c[0] == body.get("p_nx") and c[1] == body.get("p_ny")), None)
                 if not c: return send(400, {"message": "cell"})
                 tz = dt.timezone(dt.timedelta(hours=9)); today = dt.datetime.now(tz).date(); days = []
-                for i in range(7):
+                for i in range(11):                                                         # 2026-11-11: 날씨누리처럼 11일(8~10일 뒤는 하루 한 칸)
                     date = today + dt.timedelta(days=i)
+                    if i >= 8:
+                        days.append({"date":date.isoformat(),"periods":[{"reg_id":"11D20000","forecast_at":dt.datetime.combine(date,dt.time(0),tz).isoformat(),"period_hours":24,"weather":"맑음","pop":10,"source":"midterm_land","issued_at":self.fc_issued}],"tmin":-5,"tmax":6,"temperature_source":"midterm_temperature","tmin_issued_at":self.fc_issued,"tmax_issued_at":self.fc_issued}); continue
                     periods = [{"reg_id":"11D20201" if i<5 else "11D20000", "forecast_at":dt.datetime.combine(date,dt.time(h),tz).isoformat(),"period_hours":12,"sky":"DB01" if i<5 else "WB03","precip":"0" if i<5 else "WB09","pop":0 if i<5 else 60,"weather":"맑음" if i<5 else "구름많고 비","source":"short_land" if i<5 else "midterm_land","issued_at":self.fc_issued} for h in (0,12)]
                     days.append({"date":date.isoformat(),"periods":periods,"tmin":0 if i==0 else -3,"tmax":9,"temperature_source":"grid_aux" if i<5 else "midterm_temperature","tmin_issued_at":self.fc_issued,"tmax_issued_at":self.fc_issued})
                 return send(200,{"nx":c[0],"ny":c[1],"status":"ok","region":{"temp_id":"11D20201","land_id":"11D20000","label":"평창군 대관령면","method":"named_place","distance_km":1.2,"short_land_name":"대관령","midterm_land_name":"강원영서"},"days":days})

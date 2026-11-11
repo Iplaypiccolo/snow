@@ -59,7 +59,7 @@ def bid(p, name): return ev(p, f"S.branches.find(b => b.name === '{name}').id")
 # ---------------------------------------------------------------- 테스트 목록
 def t_load(p):
     names = p.locator(".tab:visible").all_inner_texts()
-    check(names == ["이동 현황", "지사별 요청·편성", "기관별 장비", "기관별 배치", "강원본부 지원장비", "로그 기록"], names)   # 2026-10-30 순서 바꿈, 강원본부 지원장비(관리자·강원본부만)
+    check(names == ["장비 지원현황", "지사별 요청·편성", "기관별 장비", "기관별 배치", "강원본부 지원장비", "로그 기록"], names)   # 2026-10-30 순서 바꿈, 강원본부 지원장비(관리자·강원본부만)
     check(p.locator("#dateInput").input_value() == day(p, 0), "오늘 날짜로 시작")
     check(not p.locator("#loading").is_visible(), "불러오는 중 표시가 사라져야 함")
 
@@ -1670,7 +1670,7 @@ def t_report(p):
     check(M["notes"] and M["notes"][0].startswith("기계화부 ") and "(" in M["notes"][0], f"아래 네모 = 기계화부 N대(기관별): {M['notes']}")
     # 지역본부 장비가 있으면 본부 단위로(서울경기 N대)
     pool = ev(p, "SSReport.model(S.date).notes.find(n => n.startsWith('지역본부'))")
-    if pool: check(re.match(r"지역본부 \d+대\(.+ \d+대", pool), pool)
+    if pool: check(re.match(r"지역본부 \d+대\([^)]+ \d+\)$", pool) and not re.search(r"\d대", pool.split("(", 1)[1]), pool)      # 2026-11-11: 지역본부 3대(수도권 1, 충북 2)
     # 2026-11-02: 지역본부 장비는 표에는 보낸 지사 이름(시흥 2), 아래 네모에는 그 본부(수도권 2대)
     sh = bid(p, "시흥")
     lab = ev(p, f"SSReport.srcLabel({{ id: 'VX', org: POOL, type: '제설차', home_branch: '{sh}' }})")
@@ -1678,6 +1678,8 @@ def t_report(p):
     check(ev(p, "SSReport.srcLabel(vehById('V001')).label") == ev(p, "vehById('V001').org"), "기계화부 장비는 기관 이름 그대로")
     # 미리 보기
     p.click("#rptView"); p.wait_for_selector("#rpPage")
+    check(p.locator("#sheetTitle").bounding_box()["width"] <= 1 and "1쪽 보고서 미리 보기" not in p.locator("#sheet").inner_text() and "워드 파일과 같은 내용" not in p.locator("#sheet").inner_text(), "2026-11-11: 미리 보기 제목(화면 읽기용으로만)·설명 줄 없음")
+    check(all(not __import__("re").search(r"\d대", n.split("(", 1)[1]) for n in M["notes"] if "(" in n), f"2026-11-11: 괄호 안은 '대' 없이(지역본부 3대(수도권 1, 충북 2)): {M['notes']}")
     pg = p.locator("#rpPage").inner_text()
     check("신속대응팀 제설장비 지원 현황" in pg and f"총 {M['total']}대" in pg and f"{M['branches']}개 기관 지원" in pg and row["name"] in pg, pg[:200])
     # 워드 받기(미리 보기 안의 버튼) → 압축 안 XML 이 올바르고 같은 내용

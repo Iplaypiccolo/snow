@@ -8,6 +8,6 @@ test('0℃·0%와 결측 구분',()=>{const h=V.table({days:[day]});assert(h.inc
 test('기온원값순서유지·모달의마우스설명제거',()=>{const h=V.table({days:[{...day,tmin:11,tmax:5}]});assert(h.indexOf('11°')<h.indexOf('5°'));assert(!h.includes(' title='));});
 test('하루 원값은 오전오후로 복제하지 않음',()=>{const h=V.table({days:[{...day,periods:[{...p,period_hours:24,pop:60}]}]});assert(h.includes('>하루</th>'));assert.equal((h.match(/60%/g)||[]).length,1);assert.equal((h.match(/fc-weather-icon/g)||[]).length,1);});
 test('날씨 원문 HTML은 문자로만',()=>{const h=V.table({days:[{...day,periods:[{...p,weather:'<img src=x onerror=alert(1)>'}]}]});assert(!h.includes('<img'));assert(h.includes('&lt;img'));});
-test('7일만 표시·누락 자료 빈칸',()=>{const h=V.table({days:Array.from({length:8},(_,i)=>({...day,date:'2026-11-'+String(7+i).padStart(2,'0')}))});assert(h.includes('11/13(금)'));assert(!h.includes('11/14'));});
+test('11일만 표시(2026-11-11 날씨누리처럼)·누락 자료 빈칸',()=>{const h=V.table({days:Array.from({length:12},(_,i)=>({...day,date:'2026-11-'+String(7+i).padStart(2,'0')}))});assert(h.includes('11/17(화)'));assert(!h.includes('11/18'));});
 test('단기/중기 하늘·강수 코드 해석·소나기4',()=>{assert.equal(V.icon(p),'☀️');assert.equal(V.icon({...p,precip:'3'}),'❄️');assert.equal(V.icon({...p,precip:'4'}),'🌧️');assert.equal(V.icon({...p,sky:'WB03',precip:'WB00'}),'🌥️');assert.equal(V.icon({...p,precip:'WB13'}),'🌨️');assert.equal(V.icon(null),'');});
 for(const[n,ok,error]of tests)console.log(`${ok?'PASS':'FAIL'} ${n}${error?' '+error:''}`);const n=tests.filter(t=>t[1]).length;console.log(`${n}/${tests.length} 통과`);process.exitCode=n===tests.length?0:1;

@@ -1070,3 +1070,6 @@ table.fixcols th, table.fixcols td { overflow-wrap: anywhere; }
 .zask .ci { flex: 1; min-width: 0; }
 .zreqs li { align-items: flex-start; }
 .zreq-btns { display: flex; gap: 4px; flex: none; }
+
+/* 화면에는 안 보이고 화면 읽기 프로그램만 읽는 글(2026-11-11: 1쪽 보고서 창 제목) */
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }

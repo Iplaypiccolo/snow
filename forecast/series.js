@@ -8,7 +8,7 @@
   // 그 뒤 구간은 기상청이 양 대신 주는 등급(pc 1~3·sc 1~2)을 그대로. 0 = 없음, null = 모름
   function rainCode(h){if(h.pc!=null)return Number.isInteger(h.pc)&&h.pc>=0&&h.pc<=3?h.pc:null;if(!num(h.p))return null;return h.p>=15?3:h.p>=3?2:h.p>0||h.pq?1:0;}
   function snowCode(h){if(h.sc!=null)return Number.isInteger(h.sc)&&h.sc>=0&&h.sc<=2?h.sc:null;if(!num(h.s))return null;return h.s>=1?2:h.s>0||h.sq?1:0;}
-  function intensity(code,snow){var L=snow?['','보통 눈','많은 눈']:['','약한비','보통비','강한비'];return Number.isInteger(code)&&code>=0&&code<L.length?L[code]:'-';}   // 비 이름은 날씨누리 화면 그대로, 0 은 빈칸
+  function intensity(code,snow){var L=snow?['-','보통 눈','많은 눈']:['-','약한비','보통비','강한비'];return Number.isInteger(code)&&code>=0&&code<L.length?L[code]:'-';}   // 비 이름은 날씨누리 화면 그대로, 0(없음)도 날씨누리처럼 '-'(2026-11-11)
   // 기상청 날씨누리처럼 곧 다가올 시각은 빼고 보여 줌(2026-11-09 사용자 결정): 지금을 가장 가까운 정시로 반올림한 시각의 다음 정시부터.
   // 예) 08:24 → 09시부터, 08:34·08:50 → 10시부터. 반환값 = 표 시작(start)에서 앞의 몇 시각을 뺄지
   function skipHours(start,now){var s=Date.parse(start);if(!Number.isFinite(s)||!Number.isFinite(now))return 0;var cut=Math.floor((now+30*60000)/H)*H+H;return Math.max(0,Math.min(24,Math.round((cut-s)/H)));}
@@ -25,12 +25,16 @@
   }
   // 3시간 칸(기상청 날씨누리 3시간 화면과 같은 규칙, 2026-11-09 625칸 대조): 칸 = 그 시각까지 3시간(03시 칸 = 01·02·03시)
   //  기온·습도 = 그 시각 값, 강수확률 = 비·눈이 있으면 최고·없으면 평균(10% 단위 반올림), 강수·신적설 = 3시간 중 가장 센 강도
+  //  2026-11-11(39칸 312칸 대조): 기상청이 양 대신 강도만 주는 구간(칸 안 시각이 모두 강도뿐)은 날씨누리도 그 칸 시각 값만 씀(강수확률·강수·신적설)
   function combine(data,skip){
     var groups={},order=[];
     hours(data).slice(skip||0).forEach(function(h){var k=slotEnd(h.t);if(!groups[k]){groups[k]=[];order.push(k);}groups[k].push(h);});
     function top(a){var x=a.filter(function(v){return v!=null;});return x.length?Math.max.apply(null,x):null;}
     return order.map(function(k){
       var g=groups[k],slot=g.filter(function(h){return h.t===+k;})[0]||null,rc=g.map(rainCode),sc=g.map(snowCode);
+      if(slot&&g.every(function(h){return h.pc!=null||h.sc!=null;}))      // 강도만 주는 구간: 그 칸 시각 값
+        return {first_at:new Date(g[0].t).toISOString(),last_at:new Date(g[g.length-1].t).toISOString(),slot_at:new Date(+k).toISOString(),hours:g.length,
+          tmp:slot.tmp,reh:slot.reh,pop:num(slot.pop)?slot.pop:null,pcp_code:rainCode(slot),snow_code:snowCode(slot)};
       var wet=rc.some(function(c){return c>0;})||sc.some(function(c){return c>0;});
       var pops=g.map(function(h){return h.pop;}).filter(num);
       var pop=!pops.length?null:wet?Math.max.apply(null,pops):Math.floor(pops.reduce(function(a,v){return a+v;},0)/pops.length/10+0.5)*10;
