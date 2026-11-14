@@ -881,6 +881,20 @@ def t_hourly_48_without_hover_notes(b):
 
 TESTS += [t_hourly_48_without_hover_notes]
 
+def t_vsrt_drizzle(b):
+    """2026-11-14(마이그레이션 98): 초단기 강수형태 빗방울(5)·눈날림(7)은 날씨누리처럼 1시간 표 강수량·신적설 칸에 이름. 1 이상이면 양 그대로, 다른 시각은 그대로"""
+    p,m=open_page(b);d=m.fc_cells[0][2][0]
+    J(p,"""(() => {const old=SSAuth.authed;SSAuth.authed=function(path,options){return old.apply(this,arguments).then(r=>{if(path.includes('/forecast_cell_detail')&&r.json&&r.json.upper){const s=r.json.upper.series;s.p[0]=0;s.pq=Array(24).fill(0);s.pq[0]=1;s.p[2]=2;s.s[1]=0;s.pt=Array(24).fill(null);s.pt[0]=5;s.pt[1]=7;s.pt[2]=5;s.vn=6;}return r;});};return null;})()""")
+    J(p,f"SSOpenForecast('{d}')");p.locator('.fc-detail tbody tr').first.click()
+    p.wait_for_function("document.querySelectorAll('#fc-pin thead tr:last-child th:not(.lb)').length===48")
+    rows=p.locator('#fc-pin tbody tr'); sn=rows.nth(0).locator('td'); rn=rows.nth(1).locator('td')
+    check(rn.nth(0).inner_text()=='빗방울' and sn.nth(0).inner_text()!='눈날림',f'빗방울 시각: 강수량 = 빗방울 {rn.nth(0).inner_text()}')
+    check(sn.nth(1).inner_text()=='눈날림' and rn.nth(1).inner_text()!='빗방울',f'눈날림 시각: 신적설 = 눈날림 {sn.nth(1).inner_text()}')
+    check(rn.nth(2).inner_text()=='2',f'빗방울이어도 1mm 이상이면 양 그대로 {rn.nth(2).inner_text()}')
+    check(rn.nth(3).inner_text()!='빗방울' and '빗방울' not in p.locator('#fc-tail').inner_text(),'다른 시각·3시간 표는 그대로')
+
+TESTS += [t_vsrt_drizzle]
+
 def t_kma_start_hour(b):
     """2026-11-09: 격자 창의 1시간·3시간 표는 기상청처럼 곧 다가올 시각을 뺌. 매시 30분 전 = 다음 정시부터, 30분부터 = 그다음 정시부터"""
     p, m = open_page(b); p.click(".tab-btn[data-tab=forecast]"); p.wait_for_timeout(600)

@@ -49,7 +49,8 @@
     var es=extra.series,st=Date.parse(extra.start_at),n=(es.t||es.s||[]).length;
     if(Object.prototype.hasOwnProperty.call(extra,'quantity_end_at')){var qe=Date.parse(extra.quantity_end_at);n=Number.isFinite(qe)?Math.max(0,Math.min(n,Math.round((qe-st)/H)+1)):0;}
     var series={vn:upper.series.vn||0};
-    ['s','p','t','r','sq','pq','h'].forEach(function(k){
+    ['s','p','t','r','sq','pq','h','pt'].forEach(      // pt(98) = 초단기 강수형태 5·6·7
+    function(k){
       series[k]=Array.from({length:24+n},function(_,i){var a=i<24?upper.series:es,j=i<24?i:i-24;return a[k]&&a[k][j]!=null?a[k][j]:null;});
     });
     return{start_at:upper.start_at,end_at:new Date(st+n*H).toISOString(),series:series};

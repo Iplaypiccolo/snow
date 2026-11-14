@@ -146,7 +146,9 @@
     function mark(html, i, vs) { var c = (vs && i < vn ? 'vs ' : '') + (i > from && dayAt(i) !== dayAt(i - 1) ? 'dl ' : ''); return c ? html.replace('<td class="', '<td class="' + c) : html; }      // dl = 날짜가 바뀌는 칸(진한 선)
     function at(k, i) { var a = sr[k]; return a && a[i] != null ? a[i] : null; }
     for (var i = from; i < to; i++) {
-      rs += mark(cellNum(at('s', i), at('sq', i) ? 1 : 0), i, 1); rp += mark(cellNum(at('p', i), at('pq', i) ? 1 : 0), i, 1); rt += mark(cellTmp(at('t', i)), i, 1);
+      var pt = at('pt', i);      // 98(2026-11-14): 초단기 강수형태 빗방울(5)·빗방울눈날림(6)·눈날림(7)은 날씨누리처럼 양 대신 이름(1 이상이면 양 그대로)
+      rs += mark(pt === 6 || pt === 7 ? (at('s', i) >= 1 ? cellNum(at('s', i), 0) : '<td class="v tr">눈날림</td>') : cellNum(at('s', i), at('sq', i) ? 1 : 0), i, 1);
+      rp += mark(pt === 5 || pt === 6 ? (at('p', i) >= 1 ? cellNum(at('p', i), 0) : '<td class="v tr">빗방울</td>') : cellNum(at('p', i), at('pq', i) ? 1 : 0), i, 1); rt += mark(cellTmp(at('t', i)), i, 1);
       if (hasPop) ro += mark(cellPop(at('r', i)), i, 1);
       if (hasHum) rh += mark(cellHum(at('h', i)), i, 0);
     }
