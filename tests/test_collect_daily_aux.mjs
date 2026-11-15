@@ -65,14 +65,14 @@ await test('SKY는명시적으로켰을때만수집',async()=>{
  const yes=world({jobs:[['SKY',MIN]],queue:[{status:200,text:grid(1,4)}]});assert((await run(yes,{sky:true})).ok);assert.equal(yes.plans[0],true);
 });
 await test('작업예산종료후다음호출에서이어받음',async()=>{
- const w=world();const fetch=w.deps.fetchText;w.deps.fetchText=async url=>{const r=await fetch(url);w.clock+=80000;return r;};
+ const w=world();const fetch=w.deps.fetchText;w.deps.fetchText=async url=>{const r=await fetch(url);w.clock+=110000;return r;};      // 2026-11-16 예산 120초(95초에 멈춤)
  const r=await run(w);assert(r.ok&&!r.done);assert.equal(r.error,'time_budget');assert.equal(r.saved,1);assert.equal(w.calls.length,1);assert.equal(r.remaining,1);
 });
 await test('미수집항목만받으며다시호출시중복API없음',async()=>{
  const w=world({jobs:[['TMX',MAX]],queue:[{status:200,text:grid(9,5)}]});assert((await run(w)).done);assert((await run(w)).done);assert.equal(w.calls.length,1);
 });
 await test('인증·계획시간도전체예산에포함',async()=>{
- const w=world();w.deps.tokenOk=async()=>{w.clock+=80000;return true;};const r=await run(w);assert.equal(r.error,'time_budget');assert.equal(w.calls.length,0);
+ const w=world();w.deps.tokenOk=async()=>{w.clock+=110000;return true;};const r=await run(w);assert.equal(r.error,'time_budget');assert.equal(w.calls.length,0);
 });
 await test('자정전후실제API요청을한국날짜별계측',async()=>{
  const w=world({clock:Date.parse('2026-11-06T23:59:59+09:00')});const fetch=w.deps.fetchText;

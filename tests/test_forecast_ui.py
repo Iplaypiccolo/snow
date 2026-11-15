@@ -929,6 +929,25 @@ def t_value_colors(b):
 
 TESTS += [t_value_colors]
 
+def t_resize_once_per_frame(b):
+    """2026-11-16 사용자 "화면에 부담을 덜 주는 선": 창 크기 바뀜이 여러 번 와도 세 창 배치는 화면 한 장에 한 번, 배치 결과는 같음, 크기를 바꾸면 다시 맞춤"""
+    p,m=open_page(b);p.click(".tab-btn[data-tab=forecast]");p.wait_for_timeout(600)
+    d=bid(p,"대관령");p.click("#fc-tree [data-fchq='강원']");p.wait_for_timeout(500);p.click(f"#fc-tree [data-fcbr='{d}']");p.wait_for_timeout(1500)
+    p.wait_for_selector('#fc-daily table')
+    pos=lambda: J(p,"['fc-pin','fc-tail','fc-daily'].map(id=>{const e=document.getElementById(id);return e&&!e.hidden?[e.style.top,e.style.right,e.querySelector('.fc-pin-in').style.zoom]:null;})")
+    before=pos()
+    n=J(p,"""(async () => { let c=0; const el=document.getElementById('fc-tail'); const d=Object.getOwnPropertyDescriptor(HTMLElement.prototype,'offsetHeight');
+      Object.defineProperty(el,'offsetHeight',{configurable:true,get(){c++;return d.get.call(this);}});
+      for(let i=0;i<30;i++) window.dispatchEvent(new Event('resize'));
+      await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))); delete el.offsetHeight; return c; })()""")
+    check(n<=12,f'크기 바뀜 30번에 배치 계산은 한 번 정도(창 높이 재기 {n}번)')
+    check(pos()==before,f'배치 결과 같음 {before} {pos()}')
+    p.set_viewport_size({'width':1100,'height':700});p.wait_for_timeout(400)
+    check(pos()!=before and all(x for x in pos()),f'크기를 바꾸면 다시 맞춤 {pos()}')
+    check(not errors,f'오류 없음 {errors[-2:]}')
+
+TESTS += [t_resize_once_per_frame]
+
 def t_kma_start_hour(b):
     """2026-11-09: 격자 창의 1시간·3시간 표는 기상청처럼 곧 다가올 시각을 뺌. 매시 30분 전 = 다음 정시부터, 30분부터 = 그다음 정시부터"""
     p, m = open_page(b); p.click(".tab-btn[data-tab=forecast]"); p.wait_for_timeout(600)

@@ -1,7 +1,7 @@
 // 일별 보강 전용. 기존 시간별 수집·완료 판정에는 쓰지 않는다.
 // 2026-11-09(84·85): sky:true 이면 하늘 상태(SKY)와 습도(REH, %)도 받음 — 일별 창 오전/오후 날씨, 1시간·3시간 표 습도
 import { GRID_URL, NX, NY, kstHour } from '../collect-forecast/core.mjs';
-const H=3600000,MAX_BYTES=2097152,BUDGET=85000;
+const H=3600000,MAX_BYTES=2097152,BUDGET=120000;      // 2026-11-16 사용자: 85→120초(함수 한 번 최대 150초 안, 25초 여유로 95초에 멈춤)
 const reply=(status,body)=>new Response(JSON.stringify(body),{status,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'}});
 const fail=code=>{throw new Error(code);};
 const hour=s=>typeof s==='string'&&Number.isFinite(Date.parse(s))&&Date.parse(s)%H===0;

@@ -45,15 +45,12 @@ begin
   perform pg_temp.chk('지사: 표에 직접 쓰기 거절','authenticated',b1,format('insert into public.gw_team_status (round_id, team_id, status) values (%s, ''GW3'', ''O'') on conflict (round_id, team_id) do update set status = ''O''', rid),'err:42501');
   perform pg_temp.chk('지사: 경로 직접 지우기는 0줄','authenticated',b1,'delete from public.gw_team_routes','ok:0');
 
-  -- ③ 규칙: 지원이 아니면 경로 안 됨, 기준일자 밖, 없는 지사, 같은 지사 두 번, 시각 형식, 지원 불가 시작일
+  -- ③ 규칙: 지원이 아니면 경로 안 됨, 기준일자 밖, 없는 지사, 같은 지사 두 번, 시각 형식(2026-11-16: 지원 불가·정비중 없앰 → 그 시험 뺌)
   perform pg_temp.chk('미정인 장비(대관령)의 경로 거절','authenticated',gw,format(sv, rid, format('[{"date":"%s","team_id":"GW3","stops":["B003"]}]', d0), '[]'),'err:23514');
   perform pg_temp.chk('기준일자 기간 밖 날짜 거절','authenticated',gw,format(sv, rid, format('[{"date":"%s","team_id":"GW1","stops":["B003"]}]', d0 + 10), '[]'),'err:23514');
   perform pg_temp.chk('없는 지사 거절','authenticated',gw,format(sv, rid, format('[{"date":"%s","team_id":"GW1","stops":["B999"]}]', d0 + 1), '[]'),'err:23503');
   perform pg_temp.chk('같은 지사 두 번 거절','authenticated',gw,format(sv, rid, format('[{"date":"%s","team_id":"GW1","stops":["B003","B003"]}]', d0 + 1), '[]'),'err:23514');
   perform pg_temp.chk('시각 형식 거절','authenticated',gw,format(sv, rid, format('[{"date":"%s","team_id":"GW1","stops":["B003"],"times":["7시"]}]', d0 + 1), '[]'),'err:23514');
-  perform pg_temp.chk('지원 불가(셋째 날부터) + 셋째 날 경로 → 전부 취소','authenticated',gw,format(sv, rid, format('[{"date":"%s","team_id":"GW1","stops":["B003"]}]', d0 + 2), format('[{"team_id":"GW1","status":"O","off_from":"%s"}]', d0 + 2)),'err:23514');
-  perform pg_temp.yes('전부 취소 — 지원 불가 시작일도 안 남음', (select off_from is null from public.gw_team_status where round_id = rid and team_id = 'GW1'));
-  perform pg_temp.chk('지원 불가(셋째 날부터)만','authenticated',gw,format(sv, rid, '[]', format('[{"team_id":"GW1","status":"O","off_from":"%s"}]', d0 + 2)),'ok:1');
   perform pg_temp.chk('경로 지우기(빈 목록)','authenticated',gw,format(sv, rid, format('[{"date":"%s","team_id":"GW2","stops":[]}]', d0 + 1), '[]'),'ok:1');
   perform pg_temp.yes('지워짐', not exists (select 1 from public.gw_team_routes where date = d0 + 1 and team_id = 'GW2'));
 

@@ -189,6 +189,8 @@
   function savePinGeo() { try { localStorage.setItem(PIN_KEY, JSON.stringify(S.pinGeo)); } catch (e) {} }
   function phoneBox(box) { var inner = box && box.querySelector('.fc-pin-in'); if (!inner) return; box.style.left = box.style.top = box.style.right = ''; inner.style.zoom = ''; inner.style.width = ''; }
   function applyPinGeo() { if (isPhone()) { phoneBox($('fc-pin')); renderTail(); return; } layoutPanels(); }
+  var resizeRaf = 0;
+  function onResize() { if (resizeRaf) return; resizeRaf = (window.requestAnimationFrame || setTimeout)(function () { resizeRaf = 0; if (window.ForecastDaily && window.ForecastDaily.onResize) window.ForecastDaily.onResize(); applyPinGeo(); }); }      // 일별 창 모양을 먼저 맞추고 세 창 배치는 layoutPanels 한 번
   // 세 창 배치(컴퓨터 화면, 2026-11-09 사용자: 한 창을 옮기거나 늘리거나 '원래대로'를 눌러도 다른 창은 그대로)
   //  1) 보이는 창을 모두 기본 상태(배율 1.2·기본 폭)로 놓고 재서, 지도 높이·폭에 맞는 공통 계수와 오른쪽 위부터 쌓는 기본 자리를 정함
   //     → 사람이 손댄 창도 이 계산에는 기본 상태로만 들어가므로, 손대지 않은 창의 크기·자리는 다른 창을 바꿔도 같음
@@ -603,7 +605,7 @@
       }
     });
     $('view-forecast').addEventListener('pointerdown', pinDrag);
-    window.addEventListener('resize', applyPinGeo);
+    window.addEventListener('resize', onResize);      // 2026-11-16: 창 크기를 바꾸는 동안 배치 계산은 화면 한 장에 한 번(예전: 크기 바뀔 때마다 여러 번 재고 다시 그림)
     $('view-forecast').addEventListener('change', function (e) {         // 범례 체크박스: 지도 칸에 보일 값
       var k = e.target && e.target.dataset && e.target.dataset.fcshow; if (!k) return;
       S.show[k] = !!e.target.checked; saveShow(); drawCells();

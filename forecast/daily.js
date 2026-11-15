@@ -80,7 +80,7 @@
       if(delta){e.preventDefault();scroll.scrollLeft+=delta;}
     },{passive:false});
   }
-  function layout(){
+  function layout(skipPanels){      // skipPanels(2026-11-16): 크기 바뀜 때는 ui.js 가 바로 뒤에 세 창 배치를 한 번 함
     var box=$('fc-daily'),mobile=$('fc-mobile'),near=$('fc-pin'),tail=$('fc-tail');if(!box||!near)return;
     var root=$('fmap').parentNode;
     if(phone()){
@@ -91,7 +91,7 @@
     }else{
       mobile.hidden=true;ids.forEach(function(id){var el=$(id);if(el.parentNode!==root)root.appendChild(el);el.removeAttribute('role');el.removeAttribute('aria-hidden');el.removeAttribute('aria-labelledby');});
       box.hidden=!D.key||D.closed;
-      window.ForecastUI.layoutPanels();      // 세 창 배치는 ui.js 한 곳(2026-11-09: 한 창을 바꿔도 다른 창은 그대로)
+      if(!skipPanels)window.ForecastUI.layoutPanels();      // 세 창 배치는 ui.js 한 곳(2026-11-09: 한 창을 바꿔도 다른 창은 그대로)
     }
   }
   function render(){
@@ -106,6 +106,7 @@
     if(D.key!==key||D.selection!==selection){var hit=key&&D.cache[key];D.key=key;D.selection=selection;D.seq++;D.data=hit?hit.data:null;D.ver=hit?hit.d:null;D.error=false;D.closed=false;D.tab='hourly';D.name=name;clearTimeout(D.timer);render();if(key){if(hit)check();else fetchDaily();}}
     layout();
   }
-  window.addEventListener('resize',function(){layout();if(visible()&&!D.data)fetchDaily();schedule();});
-  window.ForecastDaily={sync:sync,layout:layout,geo:function(){if(D.geo.scale==null)D.geo.scale=window.ForecastUI.pinDefault;return D.geo;},table:table,icon:icon};
+  // 2026-11-16: 크기 바뀜은 ui.js 가 화면 한 장에 한 번 불러 줌(배치 계산 겹치지 않게). 휴대폰↔컴퓨터 모양만 여기서 바꾸고, 컴퓨터 배치는 ui.js 가 이미 함
+  function onResize(){layout(true);if(visible()&&!D.data)fetchDaily();schedule();}
+  window.ForecastDaily={sync:sync,layout:layout,onResize:onResize,geo:function(){if(D.geo.scale==null)D.geo.scale=window.ForecastUI.pinDefault;return D.geo;},table:table,icon:icon};
 })();
