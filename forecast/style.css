@@ -52,7 +52,7 @@
 .fc-trend-box:not(.big){width:auto;min-width:283px;}
 .fc-tt.fc-t3{width:auto;min-width:100%;table-layout:auto;}
 .fc-t3 td{padding:2px 4px;min-width:34px;}
-.fc-t3 td.fc-qual{background:#edf5fb;color:#24405c;}      /* 말풍선: 3시간 창과 같은 강도 글자라 폭은 내용대로 */
+.fc-t3 td.fc-qual{}      /* 2026-11-15 사용자: 강도 칸도 다른 칸처럼 바탕색 없음(값에 따른 색만). 2026-11-16: 글자색도 다른 칸과 같게 */      /* 말풍선: 3시간 창과 같은 강도 글자라 폭은 내용대로 */
 .fc-trend-box.big{width:396px;}
 .fc-tt{width:100%;border-collapse:collapse;table-layout:fixed;font-family:var(--mono);font-size:11px;}
 .fc-tt th,.fc-tt td{border:1px solid #d6e1e9;padding:2px 1px;text-align:center;white-space:nowrap;overflow:hidden;}
@@ -61,7 +61,7 @@
 .fc-tt th.lb{width:66px;text-align:left;padding-left:3px;font-family:inherit;font-weight:700;font-size:10.5px;background:#f3f7fa;letter-spacing:-0.08em;}
 .fc-tt th.lb small{font-weight:700;font-size:10px;color:#3d5568;margin-left:1px;letter-spacing:0;}      /* 2026-11-09 사용자: 단위가 잘 보이게(진하게·크게), '강수확률%' 가 넘치지 않게 자간을 줄임 */
 .fc-tt th.s{color:#2e5fb8;} .fc-tt th.p{color:#2f7d4f;} .fc-tt th.o{color:#1f7a8c;} .fc-tt th.t{color:#b0392b;}
-.fc-tt td.v{font-weight:700;} .fc-tt td.z{color:#aaa;} .fc-tt td.neg{color:#1d5fb0;}
+.fc-tt td.v{font-weight:700;} .fc-tt td.z{color:#aaa;} 
 .fc-tt-sum{font-size:11px;color:#333;} .fc-tt-sum b{font-family:var(--mono);}
 .fc-trend-key{font-size:10.5px;color:#777;margin-top:2px;}
 /* 격자를 눌러 고정한 그림(지도 오른쪽 위) */
@@ -143,7 +143,8 @@ body.fc-pin-moving{user-select:none;}
 /* 예보 창의 모든 표 칸 가운데 정렬. 3시간 칸은 내용에 필요한 폭만 사용. */
 .fc-pin .fc-tt th,.fc-pin .fc-tt td,.fc-tail .fc-tt th,.fc-tail .fc-tt td{text-align:center;vertical-align:middle;}
 .fc-tail .fc-tt thead th{line-height:1.1;}
-.fc-tail .fc-tt td.fc-qual{background:#edf5fb;color:#24405c;white-space:nowrap;}
+.fc-tail .fc-tt td.fc-qual{white-space:nowrap;}
+
 @media(max-width:760px){.fc-tail .fc-tt{font-size:10px;}}
 
 @media(min-width:761px){.fc-tail{left:auto;right:10px;bottom:auto;}}
@@ -238,6 +239,16 @@ body.fc-pin-moving{user-select:none;}
 .fc-tt th.lb small{font-size:10px;letter-spacing:-0.02em;}
 .fc-daily-table thead th{white-space:nowrap;}
 /* 3시간 강도(약한비·보통비·많은 눈…): 조금 작고 연하게 */
-.fc-tt td.fc-qual{font-size:10px;font-weight:400;color:#3d5a72;letter-spacing:-0.05em;background:#f3f8fc;}
+.fc-tt td.fc-qual{font-size:10px;font-weight:400;letter-spacing:-0.05em;}      /* 2026-11-16 사용자 '글자색 틀린 것': 강도 칸 글자색도 다른 칸과 같게(빼기표는 회색 z) */      /* 2026-11-15: 옅은 파란 바탕 없앰 */
 @media(max-width:760px){.fc-tt th.lb{font-size:10px;white-space:normal;letter-spacing:-0.1em;}}
 #view-forecast .jr-mapbox{overflow:hidden;}      /* 예보 지도 밖으로 아무것도 나가지 않게(창 손잡이·× 포함) */
+/* 2026-11-15 사용자 "값에 따라 칸 색", 2026-11-16 사용자 "강수·강수강도·강수확률·습도도 파랑, 진하면 흰 글자": 1시간·3시간 표와 지도 말풍선 공통.
+   파랑 단계 B1 #eef4fc · B2 #d3e3f8 · B3 #a6c6f0 · B4 #4a7fd0(흰 글자) · B5 #2f5fb8(흰 글자). 파일 끝에 두어 강도 칸 글자색보다 우선 */
+.fc-tt td.cs1,.fc-tt td.cp1,.fc-tt td.co1,.fc-tt td.ch1{background:#eef4fc;}
+.fc-tt td.cs2,.fc-tt td.cp2,.fc-tt td.co2,.fc-tt td.ch2{background:#d3e3f8;}
+.fc-tt td.cs3,.fc-tt td.cp3,.fc-tt td.co3,.fc-tt td.ch3{background:#a6c6f0;}
+:is(.fc-tt,.fc-tail .fc-tt) td:is(.cs4,.cp4,.co4){background:#4a7fd0;color:#fff;}      /* :is = 3시간 강도 칸 글자색 규칙보다 우선 */
+:is(.fc-tt,.fc-tail .fc-tt) td:is(.cs5,.cp5){background:#2f5fb8;color:#fff;}
+.fc-tt td.ctn2{background:#2f5fb8;color:#fff;} .fc-tt td.ctn1{background:#bcd3f3;}
+.fc-tt td.ctw1{background:#fdebdc;} .fc-tt td.ctw2{background:#f8c9a6;}
+.fc-tt td.chd{background:#fbf0d9;}

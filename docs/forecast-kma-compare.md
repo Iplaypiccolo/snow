@@ -39,6 +39,18 @@ window.kdoc=async(code,nx,ny,hr1)=>{const [la,lo]=g2ll(nx,ny);const t=await (awa
 - 초단기 빗방울(5)·빗방울눈날림(6)·눈날림(7): 1시간 표 강수량·신적설 칸에 이름(마이그레이션 98, 6·7은 날씨누리로 아직 확인 못 함).
 - 알려진 차이(정상): 초단기 발표 시각 차이, 오늘 오전·오후 날씨 문구(우리는 지난 시각을 빼고 셈 — 사용자 결정으로 그대로 둠).
 
+## 3-1. 눈 오는 날 앞 6시간 대조 (T2·T3, 2026-11-15 사용자 "눈 올 때 실행")
+
+출처: 채팅에서 받은 계획서 `docs/forecast-snow-vsrt-plan-20261112.md` T2·T3. 기상청은 앞 6시간(초단기) 신적설을 주지 않는다 — 우리는 앞 6시간도 단기예보 신적설을 씀(마이그레이션 67).
+- 실행 조건: 앞 6시간 안에 신적설이 있는 격자가 있을 때.
+  `select nx, ny, series->'s' s, series->'sq' sq, series->'vn' vn from public.forecast_cells where exists (select 1 from generate_series(0,5) i where coalesce((series->'s'->>i)::numeric,0) > 0 or coalesce((series->'sq'->>i)::int,0) = 1) limit 20;`
+- 대상: 눈 있는 격자 3칸 이상 + 눈 없는 격자 1칸. 10분 간격 7회(약 60분).
+- 날씨누리: `kdoc(code,nx,ny,'Y')` 1시간 목록 앞 8칸 — 날짜·시각, 초단기 칸(`vs-item`) 여부, 칸 글 전체. 글에 '적설'·'신적설'이 있는지와 값, '강수량' 값을 따로 적는다. 초단기 발표 시각(`.cmp-dfs-updated`).
+- 우리: `public.forecast_cell_detail(nx,ny)` 의 `upper.start_at`, `upper.series` 의 s·sq·p·pq·pt·vn, 마지막 완료 초단기 발표 시각. 같은 초단기 발표끼리만 비교.
+- 판정: 초단기 칸에 적설이 없거나 늘 '-' → 날씨누리는 앞 6시간 적설을 안 보여 줌 / 초단기 칸 적설이 60분 그대로 → 날씨누리도 단기 값(우리와 같음) / 초단기 발표마다 바뀜 → 날씨누리 내부 계산이 있음(표본을 모아 보고) / 눈 없었음 → 미확인 유지.
+- T3(같은 때): `select h.var, count(*) filter (where v > 0) positive, count(*) filter (where v > 0 and v <> round(v)) with_decimals from public.forecast_vsrt_hours h cross join lateral unnest(h.vals) v where h.var = 'RN1' and v > -90 group by h.var;` (단기 SNO 도 같은 방식). 2026-11-14 비 오는 날 RN1 양수 49개 중 소수 0개.
+- 차이가 나와도 고치지 않는다. 보고하고 묻는다. 기상청에 없는 표시(눈 신호 T4·환산 적설 T5)는 만들지 않는다(사용자 2026-11-15).
+
 ## 4. 보고 양식
 
 - 대조 시각, 날씨누리 초단기·단기·중기 발표 시각, 서버 발표 시각.

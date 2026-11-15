@@ -160,7 +160,7 @@
         '<div class="sg-who-card"><span class="sg-dot"></span><div><small>접속 계정</small><b>' + esc((me() || {}).display_name || '') + '</b><span class="sg-role">' + esc(ROLE[rk]) + '</span></div></div>' +
         '<div class="sg-two"><div class="sg-tile"><i class="cy"></i><b>강설량 측정</b><span>예보 · 신적설 · 관측소 · 관할</span></div><div class="sg-tile"><i class="vi"></i><b>장비 지원</b><span>요청 · 승인 · 배정 · 이동</span></div></div>' },
       { tab: 'forecast', title: '기관별 예보', desc: '기관별 앞으로 24시간 예상 적설 · 강수 · 최저기온 확인' },
-      E('forecast', '예보 구간', ['#fc-meta'], '다음 정시부터 24시간 (합 · 최저)', ['앞 6시간 = 초단기예보(10분마다) · 적설 항목이 없어 0', '나머지 = 단기예보']),
+      E('forecast', '예보 구간', ['#fc-meta'], '다음 정시부터 24시간 (합 · 최저)', ['앞 6시간 = 초단기예보(10분마다) · 신적설만 단기예보', '나머지 = 단기예보']),
       E('forecast', '본부 목록', ['#fc-tree .fc-row'], '본부별 24시간 최대 적설 · 강수 · 확률 · 최저기온', ['본부 클릭 → 지사 목록']),
       E('forecast', '본부 펼치기', [upTo('#fc-tree .jr-hqpick.on', '.jr-hq')], '본부 클릭 → 지사 목록 · 지도에 그 본부 격자', [], { demo: fcHq }),
       E('forecast', '지사 고르기', [both(['#fc-tree .jr-br.on', '#fc-tree .fc-detail'])], '지사 클릭 → 그 지사 격자별 값 (적설 많은 순)', ['지명 클릭 → 지도에서 그 격자'], { demo: fcBranch }),

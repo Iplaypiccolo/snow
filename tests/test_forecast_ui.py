@@ -271,8 +271,8 @@ def t_blend_no_toggle(b):
     t1 = p.locator(".fc-pin .fc-tt").first
     check(p.locator(".fc-pin .fc-tt").count() == 1 and t1.locator("thead tr").last.locator("th:not(.lb)").count() == 48, "48시간 한 줄 표")
     check(t1.locator("thead th.vs").count() == 6 and t1.locator("td.vs").count() == 24, "앞 6시각(적설·강수·확률·기온) 초단기 표시")
-    same = J(p, "(() => { const t=document.querySelector('.fc-pin .fc-tt'); const a=t.querySelector('td.vs'), b=t.querySelector('tbody tr td:not(.vs)'); return getComputedStyle(a).backgroundColor===getComputedStyle(b).backgroundColor; })()")
-    check(same, "2026-11-09: 초단기 칸도 다른 칸과 같은 색(노란색 없음)")
+    same = J(p, "(() => { const t=document.querySelector('.fc-pin .fc-tt'); const plain=x=>![...x.classList].some(c=>/^c[sptoh]/.test(c)); const a=[...t.querySelectorAll('td.vs')].find(plain), b=[...t.querySelectorAll('tbody tr td:not(.vs)')].find(plain); return !!a && !!b && getComputedStyle(a).backgroundColor===getComputedStyle(b).backgroundColor; })()")
+    check(same, "2026-11-09: 초단기 칸도 다른 칸과 같은 색(노란색 없음). 2026-11-15: 값에 따른 색이 없는 칸끼리 비교")
     sn = t1.locator("tbody tr").nth(0).locator("td.vs").all_inner_texts(); check(sn == ["1"] * 6, f"앞 6시간 신적설 = 단기 값 1: {sn}")
     cap = p.locator(".fc-pin").inner_text(); check("색칠한 칸" not in cap and "크기 조절" not in cap and p.locator("#fc-pin .fc-pin-note, #fc-pin .fc-tt-cap").count()==0, "모달 하단 설명 삭제")
 
@@ -894,6 +894,40 @@ def t_vsrt_drizzle(b):
     check(rn.nth(3).inner_text()!='빗방울' and '빗방울' not in p.locator('#fc-tail').inner_text(),'다른 시각·3시간 표는 그대로')
 
 TESTS += [t_vsrt_drizzle]
+
+def t_value_colors(b):
+    """2026-11-15 사용자: 3시간 표 신적설·강수강도의 옅은 파란 바탕 없앰, 1시간·3시간 표 칸 색이 값에 따라 바뀜(신적설·강수·강수확률·기온·습도). 0·없음은 색 없음.
+    2026-11-16 사용자: 강수·강수강도·강수확률·습도도 파랑, 진하면 흰 글자. 기온 -5 이하·0 미만·0~4(색 없음)·4~10·10 이상, 습도 20 미만(건조)·20마다(20~40 색 없음)"""
+    p,m=open_page(b);p.click(".tab-btn[data-tab=forecast]");p.wait_for_timeout(600)
+    d=bid(p,"대관령");p.click("#fc-tree [data-fchq='강원']");p.wait_for_timeout(500);p.click(f"#fc-tree [data-fcbr='{d}']");p.wait_for_timeout(900)
+    p.wait_for_function("document.querySelectorAll('#fc-pin thead tr:last-child th:not(.lb)').length>20")
+    bg="(s)=>[...document.querySelectorAll(s)].map(t=>[t.textContent.trim(),t.className,getComputedStyle(t).backgroundColor])"
+    q=J(p,f"({bg})('#fc-tail tbody tr:nth-child(1) td, #fc-tail tbody tr:nth-child(2) td')")
+    plain=[x for x in q if x[0]=='-']; col=[x for x in q if x[0]!='-']
+    check(plain and all(x[2] in ('rgba(0, 0, 0, 0)','transparent') for x in plain),f'3시간 신적설·강수강도: 없음(-) 칸은 바탕색 없음 {plain[:2]}')
+    check(col and all(x[2] not in ('rgba(0, 0, 0, 0)','rgb(243, 248, 252)','rgb(237, 245, 251)') for x in col),f'3시간 강도가 있는 칸은 값 색 {col[:2]}')
+    lv=J(p,"""(() => { const r={}; document.querySelectorAll('#fc-pin tbody tr').forEach(tr => { const k=tr.querySelector('th').textContent; r[k]=[...tr.querySelectorAll('td')].map(t=>[t.textContent.trim(),[...t.classList].filter(c=>/^c[sptoh]/.test(c)).join('')]); }); return r; })()""")
+    tm=[v for k,v in lv.items() if k.startswith('기온')][0]
+    want=lambda t: 'ctn2' if t<=-5 else 'ctn1' if t<0 else '' if t<4 else 'ctw1' if t<10 else 'ctw2'      # 2026-11-16 사용자 구간
+    bad=[x for x in tm if x[0] not in ('-','') and want(round(float(x[0])))!=x[1]]
+    check(not bad,f'기온 칸 색 구간 {bad[:3]}')
+    rp=[v for k,v in lv.items() if k.startswith('강수mm')][0]
+    check(all((x[1]=='') == (x[0]=='-') for x in rp),f'강수: 값 있는 칸만 색 {rp[:4]}')
+    pp=[v for k,v in lv.items() if k.startswith('강수확률')][0]
+    wantp=lambda v: '' if v<=0 else 'co1' if v<=20 else 'co2' if v<=50 else 'co3' if v<=70 else 'co4'
+    check(all(wantp(int(x[0]))==x[1] for x in pp if x[0] not in ('-','')),f'강수확률 칸 색 구간 {pp[:4]}')
+    hm=[v for k,v in lv.items() if k.startswith('습도')]
+    wanth=lambda h: 'chd' if h<20 else '' if h<40 else 'ch1' if h<60 else 'ch2' if h<80 else 'ch3'
+    check(not hm or all(wanth(int(x[0]))==x[1] for x in hm[0] if x[0] not in ('-','')),f'습도 칸 색 구간(20마다) {hm[:1]}')
+    dark=J(p,"[...document.querySelectorAll('#fc-pin td,#fc-tail td')].filter(t=>/(^| )(cs4|cs5|cp4|cp5|co4|ctn2)( |$)/.test(t.className)).map(t=>getComputedStyle(t).color)")
+    check(all(c=='rgb(255, 255, 255)' for c in dark),f'진한 파랑 칸은 흰 글자 {dark[:3]}')
+    tc=J(p,"[...document.querySelectorAll('#fc-pin td,#fc-tail td')].filter(t=>t.textContent.trim()!==''&&!/(^| )(cs4|cs5|cp4|cp5|co4|ctn2)( |$)/.test(t.className)).map(t=>[t.textContent.trim(),getComputedStyle(t).color])")
+    odd=[x for x in tc if x[1]!=('rgb(170, 170, 170)' if x[0]=='-' else 'rgb(19, 33, 44)')]
+    check(not odd,f'2026-11-16 사용자 "글자색 틀린 것": 연한·색 없는 칸 글자는 모두 같은 색, 빼기표는 회색 {odd[:4]}')
+    blue=J(p,"[...document.querySelectorAll('#fc-pin td,#fc-tail td')].filter(t=>/(^| )(cp|co|ch)[1-5]( |$)/.test(t.className)).map(t=>getComputedStyle(t).backgroundColor)")
+    check(blue and all(c in ('rgb(238, 244, 252)','rgb(211, 227, 248)','rgb(166, 198, 240)','rgb(74, 127, 208)','rgb(47, 95, 184)') for c in blue),f'강수·강수강도·강수확률·습도 = 파랑 {set(blue)}')
+
+TESTS += [t_value_colors]
 
 def t_kma_start_hour(b):
     """2026-11-09: 격자 창의 1시간·3시간 표는 기상청처럼 곧 다가올 시각을 뺌. 매시 30분 전 = 다음 정시부터, 30분부터 = 그다음 정시부터"""

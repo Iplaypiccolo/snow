@@ -121,10 +121,18 @@
   //  · 마우스 말풍선: 3시간 창과 같은 칸(threeRows)  · 1시간 창: 1시간 단위 한 줄 가로 스크롤
   function hourAt(start, i) { var d = start ? new Date(Date.parse(start) + i * 3600e3) : null; return d && !isNaN(d) ? d : null; }
   function hourLabel(start, i) { var d = hourAt(start, i); return d ? p2(d.getHours()) + '시' : ''; }
-  function cellPop(v) { return v == null ? '<td class="z">-</td>' : v === 0 ? '<td class="z">0</td>' : '<td class="v">' + pct(v) + '</td>'; }
-  function cellNum(v, tc) { if (v == null) return '<td class="z">-</td>'; if (tc) return '<td class="v tr">' + rng(v, v + tc) + '</td>'; return v === 0 ? '<td class="z">-</td>' : '<td class="v">' + num(v) + '</td>'; }      // tc = 그 칸의 '~1' 시각 수. 2026-11-11: 없음도 날씨누리처럼 '-'
-  function cellHum(v) { return v == null ? '<td class="z">-</td>' : '<td class="v">' + Math.round(v) + '</td>'; }      // 85: 습도(%)
-  function cellTmp(v) { return v == null ? '<td class="z">-</td>' : '<td class="v' + (v < 0 ? ' neg' : '') + '">' + tmp(v) + '</td>'; }
+  // 2026-11-15 사용자 "숫자만 있어 보기 어려움 → 값에 따라 칸 색". 2026-11-16 사용자: 신적설·강수·강수강도·강수확률·습도 모두 파랑(진하면 흰 글자), 기온은 추우면 파랑·따뜻하면 주황. 0·없음은 색 없음
+  //  신적설 cm: ~1 = 1, 1~3 미만 = 2, 3~5 미만 = 3, 5~10 미만 = 4, 10 이상 = 5 / 강수 mm: ~1 = 1, 1~3 미만 = 2, 3~15 미만 = 3(보통비), 15~30 미만 = 4(강한비), 30 이상 = 5
+  //  강수확률 %: 10~20 = 1, 30~50 = 2, 60~70 = 3, 80 이상 = 4 / 기온 ℃(2026-11-16): -5 이하 = n2, 0 미만 = n1, 0~4 미만 = 색 없음, 4~10 미만 = w1, 10 이상 = w2
+  //  습도 %(2026-11-16): 20 미만 = d(건조), 20~40 미만 = 색 없음, 40~60 미만 = 1, 60~80 미만 = 2, 80 이상 = 3
+  function lvAmt(kind, v, tc) { if (v == null || (v === 0 && !tc)) return ''; var x = v, cut = kind === 's' ? [1, 3, 5, 10] : [1, 3, 15, 30], n = 1; for (var k = 0; k < cut.length; k++) if (x >= cut[k]) n = k + 2; return ' c' + kind + n; }
+  function lvPop(v) { return v == null || v <= 0 ? '' : ' co' + (v <= 20 ? 1 : v <= 50 ? 2 : v <= 70 ? 3 : 4); }
+  function lvTmp(v) { if (v == null) return ''; var r = Math.round(v); return r <= -5 ? ' ctn2' : r < 0 ? ' ctn1' : r < 4 ? '' : r < 10 ? ' ctw1' : ' ctw2'; }
+  function lvHum(v) { if (v == null) return ''; var r = Math.round(v); return r < 20 ? ' chd' : r < 40 ? '' : r < 60 ? ' ch1' : r < 80 ? ' ch2' : ' ch3'; }
+  function cellPop(v) { return v == null ? '<td class="z">-</td>' : v === 0 ? '<td class="z">0</td>' : '<td class="v' + lvPop(v) + '">' + pct(v) + '</td>'; }
+  function cellNum(v, tc, kind) { if (v == null) return '<td class="z">-</td>'; var c = kind ? lvAmt(kind, v, tc) : ''; if (tc) return '<td class="v tr' + c + '">' + rng(v, v + tc) + '</td>'; return v === 0 ? '<td class="z">-</td>' : '<td class="v' + c + '">' + num(v) + '</td>'; }      // tc = 그 칸의 '~1' 시각 수. 2026-11-11: 없음도 날씨누리처럼 '-'
+  function cellHum(v) { return v == null ? '<td class="z">-</td>' : '<td class="v' + lvHum(v) + '">' + Math.round(v) + '</td>'; }      // 85: 습도(%)
+  function cellTmp(v) { return v == null ? '<td class="z">-</td>' : '<td class="v' + (v < 0 ? ' neg' : '') + lvTmp(v) + '">' + tmp(v) + '</td>'; }
   function forecastHeader(slots, hourly, label) {
     function date(x){return kstDateLabel(x);}
     function hour(x){return p2(new Date(Date.parse(x)+9*3600e3).getUTCHours());}
@@ -147,8 +155,8 @@
     function at(k, i) { var a = sr[k]; return a && a[i] != null ? a[i] : null; }
     for (var i = from; i < to; i++) {
       var pt = at('pt', i);      // 98(2026-11-14): 초단기 강수형태 빗방울(5)·빗방울눈날림(6)·눈날림(7)은 날씨누리처럼 양 대신 이름(1 이상이면 양 그대로)
-      rs += mark(pt === 6 || pt === 7 ? (at('s', i) >= 1 ? cellNum(at('s', i), 0) : '<td class="v tr">눈날림</td>') : cellNum(at('s', i), at('sq', i) ? 1 : 0), i, 1);
-      rp += mark(pt === 5 || pt === 6 ? (at('p', i) >= 1 ? cellNum(at('p', i), 0) : '<td class="v tr">빗방울</td>') : cellNum(at('p', i), at('pq', i) ? 1 : 0), i, 1); rt += mark(cellTmp(at('t', i)), i, 1);
+      rs += mark(pt === 6 || pt === 7 ? (at('s', i) >= 1 ? cellNum(at('s', i), 0, 's') : '<td class="v tr cs1">눈날림</td>') : cellNum(at('s', i), at('sq', i) ? 1 : 0, 's'), i, 1);
+      rp += mark(pt === 5 || pt === 6 ? (at('p', i) >= 1 ? cellNum(at('p', i), 0, 'p') : '<td class="v tr cp1">빗방울</td>') : cellNum(at('p', i), at('pq', i) ? 1 : 0, 'p'), i, 1); rt += mark(cellTmp(at('t', i)), i, 1);
       if (hasPop) ro += mark(cellPop(at('r', i)), i, 1);
       if (hasHum) rh += mark(cellHum(at('h', i)), i, 0);
     }
@@ -292,6 +300,9 @@
       var k=row[1],code=k==='snow'||k==='pcp';
       return '<tr><th class="lb">'+row[0]+'</th>'+bins.map(function(b,i){
         var value=code?window.ForecastSeries.intensity(b[k+'_code'],k==='snow'):k==='tmp'?tmp(b.tmp):pct(b[k]),c=(code?'fc-qual':'')+(dl[i]?' dl':'');
+        var cd=b[k+'_code'];      // 2026-11-15: 값에 따라 칸 색(1시간 표와 같은 색). 강도 = 약한비 2·보통비 3·강한비 4, 보통 눈 2·많은 눈 4
+        if(value==='-')c+=' z';      // 2026-11-16: 빼기표는 다른 표처럼 회색
+        c+=k==='pcp'?(cd>0?' cp'+(cd+1):''):k==='snow'?(cd>0?' cs'+(cd===1?2:4):''):k==='pop'?lvPop(b.pop):k==='tmp'?lvTmp(b.tmp)+(b.tmp<0?' neg':''):k==='reh'?lvHum(b.reh):'';
         return '<td'+(c?' class="'+c.trim()+'"':'')+'>'+esc(value)+'</td>';
       }).join('')+'</tr>';
     }).join('');
