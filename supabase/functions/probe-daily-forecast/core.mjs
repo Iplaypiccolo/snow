@@ -3,7 +3,11 @@
 import { gridStats, pickCells } from '../collect-forecast/core.mjs';
 
 const BASE = 'https://apihub.kma.go.kr/api/typ01/';
-const KINDS = ['regions', 'land', 'temperature', 'SKY', 'TMN', 'TMX', 'zones', 'shortland', 'shortland2'];
+const KINDS = ['regions', 'land', 'temperature', 'SKY', 'TMN', 'TMX', 'zones', 'shortland', 'shortland2', 'vilage', 'ultra', 'vilage_batch'];
+// 2026-11-19 사용자 '시험해봐': 칸 하나씩 받는 단기·초단기 조회서비스가 신적설·강수를 소수로 주는지 보는 읽기 점검(저장 없음)
+const POINT_VARS = new Set(['SNO', 'PCP', 'RN1', 'PTY', 'TMP', 'T1H']);
+// 2026-11-19 사용자 '적용해': 한 칸을 한 번에 다 받을 수 있는지(rows·totalCount), 최신 발표가 언제 나오는지(lag), 여러 칸 동시 호출 시간·오류(vilage_batch)
+const isInt = (v, lo, hi) => Number.isInteger(v) && v >= lo && v <= hi;
 const SAMPLE_CELLS = [[60,127],[89,130],[56,67],[80,83],[65,72]];
 const SAMPLE_REGIONS = new Set(['11B10101','11D20201','21F20802','11H20503','11F20405','11F20603']);
 const reply = (status, body) => new Response(JSON.stringify(body), {
@@ -26,6 +30,25 @@ export function requestFor(kind, now, query = {}) {
     path: 'url/' + (kind === 'shortland' ? 'fct_afs_dl.php' : 'fct_afs_dl2.php'),
     params: { reg: '', disp: '1', help: '1' }, // 두 발표시각 생략은 공식 명세의 최신 자료 조회.
   };
+  if (kind === 'vilage' || kind === 'ultra') {
+    const { nx, ny } = query, rows = query.rows ?? 1000, lag = query.lag ?? 90;
+    if (!isInt(nx, 1, 149) || !isInt(ny, 1, 253) || !isInt(rows, 10, 2000) || !isInt(lag, 10, 180)) return null;
+    let base_date, base_time;
+    if (kind === 'vilage') { const t = issue(now + (90 - lag) * 60000, false); base_date = t.slice(0, 8); base_time = t.slice(8, 10) + '00'; }
+    else {   // 초단기예보는 매시 30분 발표, 약 45분 뒤 제공
+      const d = new Date(Math.floor((now - 45 * 60000) / 3600e3) * 3600e3 + 9 * 3600e3);
+      const iso = d.toISOString().replace(/[-T:]/g, ''); base_date = iso.slice(0, 8); base_time = iso.slice(8, 10) + '30';
+    }
+    return { url: 'https://apihub.kma.go.kr/api/typ02/openApi/VilageFcstInfoService_2.0/' + (kind === 'vilage' ? 'getVilageFcst' : 'getUltraSrtFcst'),
+      params: { pageNo: '1', numOfRows: String(rows), dataType: 'JSON', base_date, base_time, nx: String(nx), ny: String(ny) } };
+  }
+  if (kind === 'vilage_batch') {
+    const { cells } = query, rows = query.rows ?? 1500, lag = query.lag ?? 90, par = query.par ?? 5;
+    if (!Array.isArray(cells) || cells.length < 1 || cells.length > 40 || !isInt(par, 1, 8)) return null;
+    const specs = cells.map(c => Array.isArray(c) && c.length === 2 ? requestFor('vilage', now, { nx: c[0], ny: c[1], rows, lag }) : null);
+    if (specs.some(x => !x)) return null;
+    return { batch: specs, par, params: { cells: cells.length, rows: String(rows), par: String(par), base_time: specs[0].params.base_date + specs[0].params.base_time } };
+  }
   if (kind === 'zones') {
     const page = query.page ?? 1, regId = query.regId ?? '';
     if (!Number.isInteger(page) || page < 1 || page > 20 || typeof regId !== 'string' || (regId !== '' && !/^[0-9A-Z]{8}$/.test(regId))) return null;
@@ -45,6 +68,40 @@ export function requestFor(kind, now, query = {}) {
   } };
 }
 
+// 칸 조회 응답 요약: 전체 줄 수, 이번에 받은 줄 수, 마지막 예보 시각, 종류별 줄 수(저장 안 함)
+export function pointSummary(response, rows) {
+  const cats = {};
+  let last = '';
+  for (const a of rows) { const c = String(a.category).slice(0, 4); cats[c] = (cats[c] || 0) + 1; const t = String(a.fcstDate || '') + String(a.fcstTime || ''); if (t > last) last = t; }
+  return { totalCount: Number(response?.body?.totalCount), got: rows.length, last: last.slice(0, 12), cats };
+}
+
+// 여러 칸 동시 호출 시험: 칸마다 상태·시간·줄 수만(값은 돌려주지 않음)
+async function pointBatch(spec, key, deps) {
+  const out = new Array(spec.batch.length); let next = 0; const t0 = deps.now();
+  const formKey = new URLSearchParams({ authKey: key }).toString().slice('authKey='.length);
+  async function one(i) {
+    const s = spec.batch[i], url = new URL(s.url);
+    for (const [k, v] of Object.entries(s.params)) url.searchParams.set(k, v);
+    url.searchParams.set('authKey', key);
+    const a = deps.now();
+    try {
+      const r = await deps.fetchText(url.href), ms = deps.now() - a;
+      let res = { nx: +s.params.nx, ny: +s.params.ny, status: r.status, ms, bytes: r.bytes };
+      try {
+        const response = JSON.parse(String(r.text || '')).response, code = String(response?.header?.resultCode);
+        const raw = response?.body?.items?.item || [], rows = Array.isArray(raw) ? raw : [raw];
+        res.code = code; if (['00', '0'].includes(code)) Object.assign(res, pointSummary(response, rows)); delete res.cats;
+      } catch { res.code = 'not_json'; res.head = String(r.text || '').split(key).join('[redacted]').split(encodeURIComponent(key)).join('[redacted]').split(formKey).join('[redacted]').slice(0, 120); }
+      out[i] = res;
+    } catch { out[i] = { nx: +s.params.nx, ny: +s.params.ny, error: 'upstream_unavailable', ms: deps.now() - a }; }
+  }
+  async function worker() { while (next < spec.batch.length) { const i = next++; await one(i); } }
+  await Promise.all(Array.from({ length: spec.par }, worker));
+  const ok = out.filter(x => x && ['00', '0'].includes(x.code)).length;
+  return { ok: ok === out.length, kind: 'vilage_batch', params: spec.params, total_ms: deps.now() - t0, ok_cells: ok, results: out };
+}
+
 export async function handle(req, deps) {
   if (req.method !== 'POST') return reply(405, { ok: false, error: 'post_required' });
   const token = req.headers.get('x-collector-token');
@@ -58,16 +115,19 @@ export async function handle(req, deps) {
     body = JSON.parse(text);
   } catch { return reply(400, { ok: false, error: 'bad_json' }); }
   const kind = body?.kind, spec = requestFor(kind, deps.now(), body || {});
-  const allowed = kind === 'zones' ? ['kind', 'page', 'regId'] : ['kind'];
+  const allowed = kind === 'zones' ? ['kind', 'page', 'regId'] : (kind === 'vilage' || kind === 'ultra') ? ['kind', 'nx', 'ny', 'rows', 'lag']
+    : kind === 'vilage_batch' ? ['kind', 'cells', 'rows', 'lag', 'par'] : ['kind'];
   if (!spec || Object.keys(body).some(k => !allowed.includes(k))) return reply(400, { ok: false, error: 'bad_request' });
   const key = String(deps.env('KMA_AUTH_KEY') || '').trim();
   if (!key) return reply(503, { ok: false, error: 'missing_kma_key' });
+  if (kind === 'vilage_batch') return reply(200, await pointBatch(spec, key, deps));
   const url = new URL(spec.url || BASE + spec.path);
   for (const [k, v] of Object.entries(spec.params)) url.searchParams.set(k, v);
   url.searchParams.set('authKey', key);
-  let r;
+  let r; const t0 = deps.now();
   try { r = await deps.fetchText(url.href); }
   catch { return reply(502, { ok: false, kind, error: 'upstream_unavailable' }); }
+  const elapsed = deps.now() - t0;
   // 기상청 오류가 요청 주소를 반사해도 키를 반환하지 않는다. 원본 오류/주소는 로그에도 쓰지 않는다.
   const formKey = new URLSearchParams({ authKey: key }).toString().slice('authKey='.length);
   const text = String(r.text || '').split(key).join('[redacted]').split(encodeURIComponent(key)).join('[redacted]').split(formKey).join('[redacted]');
@@ -93,6 +153,22 @@ export async function handle(req, deps) {
     } catch {
       out.ok = false; delete out.items;
       out.error = 'zone_api_error'; out.text = text.slice(0, 400);
+    }
+  } else if (kind === 'vilage' || kind === 'ultra') {
+    try {
+      const response = JSON.parse(text).response, result = response?.header?.resultCode;
+      if (!['00', '0'].includes(String(result))) throw new Error('point_api_error');
+      const raw = response?.body?.items?.item || [], rows = Array.isArray(raw) ? raw : [raw];
+      Object.assign(out, pointSummary(response, rows), { elapsed_ms: elapsed });
+      out.items = rows.filter(a => POINT_VARS.has(String(a.category))).slice(0, 600).map(a => ({
+        c: String(a.category).slice(0, 4), d: String(a.fcstDate || '').slice(0, 8), t: String(a.fcstTime || '').slice(0, 4), v: String(a.fcstValue ?? '').slice(0, 30) }));
+      out.distinct = {};
+      for (const a of out.items) (out.distinct[a.c] ??= new Set()).add(a.v);
+      for (const c of Object.keys(out.distinct)) out.distinct[c] = [...out.distinct[c]].slice(0, 40);
+      out.ok = out.ok && out.items.length > 0;
+    } catch {
+      out.ok = false; delete out.items; delete out.distinct;
+      out.error = 'point_api_error'; out.text = text.slice(0, 400);
     }
   } else if (['SKY', 'TMN', 'TMX'].includes(kind)) {
     out.stats = gridStats(text);

@@ -66,6 +66,57 @@ await test('격자 표본에서0과결측구분',async()=>{
   const values=Array(149*253).fill('1');values[(127-1)*149+60-1]='0';values[(130-1)*149+89-1]='-999';
   const b=await(await handle(req({kind:'TMN'}),world({text:values.join(',')}).deps)).json();assert.equal(b.samples[0].value,0);assert.equal(b.samples[1].value,null);assert.equal(b.samples.length,5);
 });
+await test('칸 하나 단기조회: 최신 단기 발표·고정 주소',()=>{
+  const s=requestFor('vilage',now,{nx:60,ny:127});assert(s.url.endsWith('/VilageFcstInfoService_2.0/getVilageFcst'));
+  assert.equal(s.params.base_date,'20261106');assert.equal(s.params.base_time,'1400');assert.equal(s.params.nx,'60');assert.equal(s.params.ny,'127');
+});
+await test('칸 하나 초단기조회: 45분 지난 정시 30분 발표',()=>{
+  assert.equal(requestFor('ultra',Date.parse('2026-11-06T16:44:00+09:00'),{nx:60,ny:127}).params.base_time,'1530');
+  assert.equal(requestFor('ultra',Date.parse('2026-11-06T16:46:00+09:00'),{nx:60,ny:127}).params.base_time,'1630');
+  assert.equal(requestFor('ultra',Date.parse('2026-11-07T00:10:00+09:00'),{nx:60,ny:127}).params.base_date,'20261106');
+});
+await test('칸 하나 조회 좌표 검사',async()=>{
+  for(const q of[{},{nx:0,ny:1},{nx:150,ny:1},{nx:1,ny:254},{nx:'60',ny:127},{nx:1.5,ny:2}])assert.equal(requestFor('vilage',now,q),null);
+  const w=world();assert.equal((await handle(req({kind:'vilage',nx:60,ny:127,base_date:'20200101'}),w.deps)).status,400);assert.equal(w.calls.length,0);
+});
+await test('칸 하나 조회: 신적설·강수 원문 그대로, 다른 종류 뺌',async()=>{
+  const item=[{category:'SNO',fcstDate:'20261106',fcstTime:'1800',fcstValue:'1.3cm'},{category:'SNO',fcstDate:'20261106',fcstTime:'1900',fcstValue:'1cm 미만'},
+    {category:'PCP',fcstDate:'20261106',fcstTime:'1800',fcstValue:'2.5mm'},{category:'WSD',fcstDate:'20261106',fcstTime:'1800',fcstValue:'3'}];
+  const w=world({text:JSON.stringify({response:{header:{resultCode:'00'},body:{items:{item}}}})});
+  const b=await(await handle(req({kind:'vilage',nx:60,ny:127}),w.deps)).json();assert(b.ok);assert.equal(b.items.length,3);
+  assert.deepEqual(b.distinct.SNO,['1.3cm','1cm 미만']);assert.equal(b.distinct.WSD,undefined);
+});
+await test('칸 하나 조회 오류에서 키 가리기',async()=>{
+  const w=world();w.text='<OpenAPI_ServiceResponse>'+w.key+'</OpenAPI_ServiceResponse>';const b=await(await handle(req({kind:'ultra',nx:60,ny:127}),w.deps)).json();
+  assert.equal(b.ok,false);assert.equal(b.error,'point_api_error');assert(!JSON.stringify(b).includes(w.key));
+});
+await test('칸 조회 줄 수·최신 발표 선택',()=>{
+  const s=requestFor('vilage',now,{nx:60,ny:127,rows:1500,lag:10});assert.equal(s.params.numOfRows,'1500');assert.equal(s.params.base_time,'1400');
+  assert.equal(requestFor('vilage',Date.parse('2026-11-06T14:05:00+09:00'),{nx:60,ny:127,lag:10}).params.base_time,'1100');
+  assert.equal(requestFor('vilage',Date.parse('2026-11-06T14:12:00+09:00'),{nx:60,ny:127,lag:10}).params.base_time,'1400');
+  assert.equal(requestFor('vilage',now,{nx:60,ny:127,rows:5000}),null);assert.equal(requestFor('vilage',now,{nx:60,ny:127,lag:5}),null);
+});
+await test('여러 칸 시험: 개수·동시 수 검사',()=>{
+  assert.equal(requestFor('vilage_batch',now,{cells:[]}),null);assert.equal(requestFor('vilage_batch',now,{cells:Array(41).fill([60,127])}),null);
+  assert.equal(requestFor('vilage_batch',now,{cells:[[60,127]],par:9}),null);assert.equal(requestFor('vilage_batch',now,{cells:[[0,1]]}),null);
+  assert.equal(requestFor('vilage_batch',now,{cells:[[60,127],[61,128]]}).batch.length,2);
+});
+await test('여러 칸 시험: 칸마다 상태·줄 수만, 키 없음',async()=>{
+  const item=[{category:'SNO',fcstDate:'20261106',fcstTime:'1800',fcstValue:'1.3cm'},{category:'TMP',fcstDate:'20261110',fcstTime:'0000',fcstValue:'3'}];
+  const w=world({text:JSON.stringify({response:{header:{resultCode:'00'},body:{totalCount:1234,items:{item}}}})});
+  const b=await(await handle(req({kind:'vilage_batch',cells:[[60,127],[61,128],[62,129]],par:2}),w.deps)).json();
+  assert(b.ok);assert.equal(b.results.length,3);assert.equal(w.calls.length,3);assert.equal(b.results[0].totalCount,1234);assert.equal(b.results[0].last,'202611100000');
+  assert.equal(b.results[0].cats,undefined);assert(!JSON.stringify(b).includes(w.key));assert.equal(new URL(w.calls[0]).searchParams.get('numOfRows'),'1500');
+});
+await test('여러 칸 시험: 오류 응답도 키 가림',async()=>{
+  const w=world();w.text='<html>'+w.key+'</html>';const b=await(await handle(req({kind:'vilage_batch',cells:[[60,127]]}),w.deps)).json();
+  assert.equal(b.ok,false);assert.equal(b.results[0].code,'not_json');assert(!JSON.stringify(b).includes(w.key));
+});
+await test('칸 하나 조회: 전체 줄 수·마지막 시각',async()=>{
+  const item=[{category:'SNO',fcstDate:'20261106',fcstTime:'1800',fcstValue:'1.3cm'},{category:'WSD',fcstDate:'20261109',fcstTime:'2300',fcstValue:'3'}];
+  const w=world({text:JSON.stringify({response:{header:{resultCode:'00'},body:{totalCount:900,items:{item}}}})});
+  const b=await(await handle(req({kind:'vilage',nx:60,ny:127,rows:1500}),w.deps)).json();assert.equal(b.totalCount,900);assert.equal(b.got,2);assert.equal(b.last,'202611092300');assert.equal(b.cats.WSD,1);
+});
 for (const [n, ok, e] of results) console.log(`${ok ? 'PASS' : 'FAIL'} ${n}${e ? ': ' + e : ''}`);
 const passed = results.filter(r => r[1]).length;
 console.log(`${passed}/${results.length} 통과`);
