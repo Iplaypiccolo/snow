@@ -895,6 +895,18 @@ def t_vsrt_drizzle(b):
 
 TESTS += [t_vsrt_drizzle]
 
+def t_vsrt_snow_decimal(b):
+    """2026-11-21(마이그레이션 105): 앞 6시간 신적설은 서버가 0.6cm 단위로 계산 → 1시간 표에 소수 그대로(0.6·1.2), 초단기 시각 3 이상은 '3~'. 단기 시각은 그대로"""
+    p,m=open_page(b);d=m.fc_cells[0][2][0]
+    J(p,"""(() => {const old=SSAuth.authed;SSAuth.authed=function(path,options){return old.apply(this,arguments).then(r=>{if(path.includes('/forecast_cell_detail')&&r.json&&r.json.upper){const s=r.json.upper.series;s.s=Array(24).fill(0);s.sq=Array(24).fill(0);s.s[0]=0.6;s.s[1]=1.2;s.s[2]=3;s.s[7]=3;s.pt=null;s.vn=6;}return r;});};return null;})()""")
+    J(p,f"SSOpenForecast('{d}')");p.locator('.fc-detail tbody tr').first.click()
+    p.wait_for_function("document.querySelectorAll('#fc-pin thead tr:last-child th:not(.lb)').length===48")
+    sn=p.locator('#fc-pin tbody tr').nth(0).locator('td')
+    got=[sn.nth(i).inner_text() for i in (0,1,2,3,7)]
+    check(got==['0.6','1.2','3~','-','3'],f'초단기 계산 신적설 소수·3~, 단기 시각은 그대로 {got}')
+
+TESTS += [t_vsrt_snow_decimal]
+
 def t_value_colors(b):
     """2026-11-15 사용자: 3시간 표 신적설·강수강도의 옅은 파란 바탕 없앰, 1시간·3시간 표 칸 색이 값에 따라 바뀜(신적설·강수·강수확률·기온·습도). 0·없음은 색 없음.
     2026-11-16 사용자: 강수·강수강도·강수확률·습도도 파랑, 진하면 흰 글자. 기온 -5 이하·0 미만·0~4(색 없음)·4~10·10 이상, 습도 20 미만(건조)·20마다(20~40 색 없음)"""

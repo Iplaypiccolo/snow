@@ -8,6 +8,7 @@
    - 장비 지원의 지사별 요청·편성에서 예상 적설·강수를 누르면 이 탭의 그 지사로 바로 옵니다(window.ForecastUI.openBranch).
    - 격자는 번호 대신 지명(시군구 읍면동, data/grid_names.json — tools/build_grid_names.py 가 만듦)으로 보이고 번호는 작게 곁들임
    - 값(2026-11-04, 마이그레이션 67): 앞 6시간 = 초단기예보(10분마다, 강수·확률·기온. 신적설은 모든 시각 단기예보), 나머지 시각 = 단기예보.
+     105(2026-11-21): 초단기 시각 신적설은 날씨누리처럼 초단기 강수형태·강수·기온으로 계산(0.6cm 단위, docs/forecast-snow-point-20261120.md).
      서버가 섞어 저장하므로 지사별 요청·편성·확정 값과 같음. 고정 창 표에서 초단기 시각은 색칠(series.vn). 전환 버튼·'발표 기준' 문구는 없앰
    - 격자를 누르면 뜨는 창(컴퓨터 화면만): 제목 줄을 끌어 옮기고, 아래쪽 모서리를 끌어 크기를 바꿈(글자도 같은 비율). 다른 격자를 눌러도 그대로이고 이 브라우저에 기억
    - 서버 읽기: branch_forecast(지사 59줄) 한 번 + 본부를 열 때 forecast_grid(그 본부 지사들의 격자, 수 KB) + 지사를 열 때 그 지사 추이(약 10KB)
@@ -24,9 +25,10 @@
   function p2(n) { return String(n).padStart(2, '0'); }
   function kstDateLabel(iso) { var d=new Date(Date.parse(iso)+9*3600e3); return isNaN(d)?'-':(d.getUTCMonth()+1)+'/'+d.getUTCDate()+'('+ '일월화수목금토'[d.getUTCDay()]+')'; }
   function fmtHour(iso) { var d = new Date(Date.parse(iso)+9*3600e3); return isNaN(d) ? '-' : kstDateLabel(iso) + ' ' + p2(d.getUTCHours()) + '시'; }
-  function num(v) { return v == null ? '-' : String(Math.round(v)); }                             // 적설·강수(2026-11-04): 기상청 격자 값은 정수로만 옴 → 소수점 없이
+  function r1(v) { return Math.round(v * 10) / 10; }
+  function num(v) { return v == null ? '-' : String(r1(v)); }                             // 적설·강수: 격자 값은 정수. 105(2026-11-21): 앞 6시간 신적설은 0.6cm 단위 계산 값 → 소수 한 자리까지
   // 범위(마이그레이션 62): '1mm·1cm 미만' 시각마다 위쪽 +1 → '0~3', 한 시각뿐이면 '~1'. hi 가 없으면(예전 자료) 아래쪽만
-  function rng(lo, hi) { if (lo == null) return '-'; var a = Math.round(lo), b = hi == null ? a : Math.round(hi); return b > a ? (a === 0 && b === 1 ? '~1' : a + '~' + b) : String(a); }
+  function rng(lo, hi) { if (lo == null) return '-'; var a = r1(lo), b = hi == null ? a : r1(hi); return b > a ? (a === 0 && b === 1 ? '~1' : a + '~' + b) : String(a); }
   function tmp(v) { return v == null ? '-' : String(Math.round(v * 10) / 10); }                 // 기온(℃): -5, 1.5
   function pct(v) { return v == null ? '-' : String(Math.round(v)); }                             // 강수확률(%): 60
   function hh(iso) { var d = iso ? new Date(iso) : null; return d && !isNaN(d) ? p2(d.getHours()) + '시' : '-'; }
@@ -155,7 +157,7 @@
     function at(k, i) { var a = sr[k]; return a && a[i] != null ? a[i] : null; }
     for (var i = from; i < to; i++) {
       var pt = at('pt', i);      // 98(2026-11-14): 초단기 강수형태 빗방울(5)·빗방울눈날림(6)·눈날림(7)은 날씨누리처럼 양 대신 이름(1 이상이면 양 그대로)
-      rs += mark(pt === 6 || pt === 7 ? (at('s', i) >= 1 ? cellNum(at('s', i), 0, 's') : '<td class="v tr cs1">눈날림</td>') : cellNum(at('s', i), at('sq', i) ? 1 : 0, 's'), i, 1);
+      rs += mark(pt === 6 || pt === 7 ? (at('s', i) >= 1 ? cellNum(at('s', i), 0, 's') : '<td class="v tr cs1">눈날림</td>') : i < vn && at('s', i) >= 3 ? '<td class="v' + lvAmt('s', 3) + '">3~</td>' : cellNum(at('s', i), at('sq', i) ? 1 : 0, 's'), i, 1);      // 105: 초단기 계산 신적설 3cm 이상은 날씨누리처럼 '3~'
       rp += mark(pt === 5 || pt === 6 ? (at('p', i) >= 1 ? cellNum(at('p', i), 0, 'p') : '<td class="v tr cp1">빗방울</td>') : cellNum(at('p', i), at('pq', i) ? 1 : 0, 'p'), i, 1); rt += mark(cellTmp(at('t', i)), i, 1);
       if (hasPop) ro += mark(cellPop(at('r', i)), i, 1);
       if (hasHum) rh += mark(cellHum(at('h', i)), i, 0);
