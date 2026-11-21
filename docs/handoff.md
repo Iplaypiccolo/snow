@@ -44,6 +44,11 @@
 
 ## 기록 (최신이 맨 위)
 
+### 2026-11-21 · 커밋 (이 기록 커밋 하나) · 장비 지원 서버 자료·함수 지움(109)
+- **서버 변경**: 마이그레이션 109(사용자 "적용해", 20:28) — 표 9개(support_rounds·round_requests·round_allocations·round_vehicle_status·vehicles·vehicle_routes·gw_team·gw_team_routes·gw_team_status)와 그 표만 쓰던 함수 27개 지움. 되돌릴 수 없음(구조는 `docs/equipment-archive.md`).
+- 확인(20:28~20:35): 남은 표·함수 없음. 특보 수집 20:31 정상(27줄), 초단기 20:28·20:33 정상, 일별 보강 20:30 정상, 예약 실패 0. 단기 20시 발표는 20:25 기상청 느림으로 다음 예약에 이어서(지우기 전부터).
+— ✍ Claude Code 작성
+
 ### 2026-11-21 · 커밋 (이 기록 커밋 하나) · 장비 지원 페이지 없앰(화면·시험), 보관 문서
 - 사용자 결정: 장비 지원은 더 이상 쓰지 않음 → 페이지를 없애고 md 로 보관. 보관 문서 `docs/equipment-archive.md`(코드 = 커밋 709deed, 탭·기능, 서버 표 열 목록·함수 27개·마이그레이션 번호, 다시 만드는 법).
 - 지운 것: `equipment/` 폴더, 시험 3개(test_equipment·test_equipment_crew·test_equipment_crew_core), index.html 위쪽 [장비 지원/강설량 측정] 전환·장비 메뉴·기준일자 칸·화면 밝기·장비 [새로고침],
