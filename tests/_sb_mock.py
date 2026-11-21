@@ -286,6 +286,10 @@ class Mock:
                     ts = sorted((x.get("updated_at") for x in self.branch_forecast if x.get("updated_at")), reverse=True)
                     return send(200, [{"updated_at": ts[0]}] if ts else [])
                 return send(200, self.branch_forecast)
+            if tbl == "forecast_point_open" and "/rpc/" in path:                            # 107: 지사를 열면 칸 조회 요청(시험에선 받는 중 아님)
+                if not self.usable(u): return send(401, {"message": "login"})
+                self.point_opens = getattr(self, "point_opens", []) + [body.get("p_branch")]
+                return send(200, {"ok": True, "pending": False})
             if tbl == "forecast_version" and "/rpc/" in path:                               # 83: 예보가 바뀌었는지(작은 조회)
                 if not self.usable(u): return send(401, {"message": "login"})
                 self.fc_version_calls = getattr(self, "fc_version_calls", 0) + 1

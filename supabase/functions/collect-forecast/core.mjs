@@ -16,14 +16,19 @@
 //  * 처리 중 예상 못 한 오류는 수집 실패(forecast_fail / forecast_vsrt_fail)에 남기고 오류 응답(키는 가림)
 //  * 관측 기온(마이그레이션 96, 2026-11-11 사용자): 본문 {"obs":true} → 초단기실황 격자(nph-dfs_odam_grd) 기온(T1H) 매시 정각 값을 서버가 알려 준 시각만큼 받아 forecast_obs_put.
 //    일별 '오늘' 최저·최고를 날씨누리처럼(지난 시각은 관측) 계산하려는 것. 아직 안 나온 시각('dfs_file_read')은 다음 예약 때. 시험 호출 {"obs":true,"probe":true}: 저장 없이 요약만
+//  * 단기 칸 조회(마이그레이션 107, 2026-11-21 사용자 "적용해"): 본문 {"point":true} → 서버(forecast_point_plan)가 알려 준 연 지사 격자만
+//    단기 칸 조회(getVilageFcst, 칸 하나 × 약 4일)를 8개씩 동시에 받아 신적설(SNO)만 골라 forecast_point_put. '0.5cm미만' = -0.5, 적설없음 = 저장 안 함.
+//    날씨누리 6시간 뒤 신적설이 이 값(소수)이라서. 아직 안 나온 발표(결과 코드 03)는 다음 예약 때. 실패 칸은 서버가 3분 뒤 다시(발표마다 3번까지)
 //  * 순수 로직은 Node 로 시험: tests/test_collect_forecast.mjs
 // ============================================================
 export const GRID_URL = 'https://apihub.kma.go.kr/api/typ01/cgi-bin/url/nph-dfs_shrt_grd';
 export const VSRT_URL = 'https://apihub.kma.go.kr/api/typ01/cgi-bin/url/nph-dfs_vsrt_grd';
 export const ODAM_URL = 'https://apihub.kma.go.kr/api/typ01/cgi-bin/url/nph-dfs_odam_grd';      // 96: 초단기실황(관측) 격자
 export const VSRT_VARS = ['T1H', 'RN1', 'POP', 'PTY', 'SKY', 'REH'];      // 시험 호출로 받아 볼 수 있는 초단기 종류. 실제로 받을 종류는 서버(forecast_vsrt_begin)가 정함
+export const POINT_URL = 'https://apihub.kma.go.kr/api/typ02/openApi/VilageFcstInfoService_2.0/getVilageFcst';      // 107: 단기 칸 조회
 export const NX = 149, NY = 253;
 const BUDGET_MS = 120000, GAP_MS = 500, RETRY_MS = 2000, TRIES = 4;   // 무료 플랜 함수 한 번 최대 150초
+const POINT_PAR = 8, POINT_BUDGET_MS = 100000;      // 107: 칸 조회 동시 8개, 100초 넘으면 남은 칸은 다음 예약 때
 const VSRT_PAR = 3;      // 89: 초단기 동시에 받는 수(기상청이 느릴 때 2분 안에 끝나게). 부르는 횟수는 그대로
 
 const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
@@ -131,6 +136,61 @@ async function collectVsrt(deps, key) {
   return json(200, { ok: !lastErr || done, done, tmfc: used && kstMinute(used), hours: put, waiting: !used, error: done ? undefined : lastErr || undefined });
 }
 
+// 107: 칸 조회 신적설 글자 → cm. '1.4cm' → 1.4, '0.5cm미만' → -0.5(음수 = 미만), '적설없음' → 0, 'x cm 이상' → x, 모르는 글자 → null
+export function snoValue(s) {
+  const t = String(s == null ? '' : s).replace(/\s+/g, '');
+  if (!t) return null;
+  if (t.includes('없음')) return 0;
+  let m = t.match(/^(\d+(?:\.\d+)?)(?:cm)?미만$/); if (m) return -Number(m[1]);
+  m = t.match(/^(\d+(?:\.\d+)?)(?:cm)?(?:이상)?$/); if (m) return Number(m[1]);
+  return null;
+}
+// 107: 칸 조회 응답(JSON) → { h: {epoch초: cm(0 아닌 시각만)}, last_at: 1시간 간격 마지막 시각 } / 아직 없음 { notReady } / 그 밖 null
+export function pointSnow(text) {
+  let res; try { res = JSON.parse(String(text || '')).response; } catch { return null; }
+  const code = String(res && res.header && res.header.resultCode);
+  if (code === '03') return { notReady: true };
+  if (code !== '00' && code !== '0') return null;
+  const raw = res.body && res.body.items && res.body.items.item, rows = Array.isArray(raw) ? raw : raw ? [raw] : [];
+  const at = new Map();
+  for (const a of rows) {
+    if (!a || a.category !== 'SNO') continue;
+    const d = String(a.fcstDate || ''), t = String(a.fcstTime || '').padStart(4, '0');
+    if (!/^\d{8}$/.test(d) || !/^\d{2}00$/.test(t)) continue;
+    const v = snoValue(a.fcstValue); if (v === null) continue;
+    at.set(Date.UTC(+d.slice(0, 4), +d.slice(4, 6) - 1, +d.slice(6, 8), +t.slice(0, 2)) - 9 * 3600e3, v);
+  }
+  if (!at.size) return null;
+  const ks = [...at.keys()].sort((a, b) => a - b); let last = ks[0];
+  for (let i = 1; i < ks.length && ks[i] - ks[i - 1] === 3600e3; i++) last = ks[i];      // 4일째는 3시간 간격 → 1시간 간격 끝까지만
+  const h = {}; for (const k of ks) { if (k > last) break; const v = at.get(k); if (v !== 0) h[String(k / 1000)] = v; }
+  return { h, last_at: new Date(last).toISOString() };
+}
+// 107: 연 지사 격자 칸 조회 받기
+async function collectPoint(deps, key) {
+  const { data: plan, error } = await deps.store.pointPlan();
+  if (error || !plan) return json(500, { ok: false, error: 'db' });
+  const cells = Array.isArray(plan.cells) ? plan.cells : [];
+  if (!cells.length || !plan.tmfc) return json(200, { ok: true, cells: 0 });
+  const base = kstHour(plan.tmfc), t0 = deps.now(), rows = [];
+  let next = 0, calls = 0, fails = 0, waiting = 0, bytes = 0, budget = false;
+  async function worker() {
+    while (next < cells.length) {
+      if (deps.now() - t0 > POINT_BUDGET_MS) { budget = true; return; }
+      const [nx, ny] = cells[next++];
+      const r = await deps.fetchText(`${POINT_URL}?pageNo=1&numOfRows=1100&dataType=JSON&base_date=${base.slice(0, 8)}&base_time=${base.slice(8, 10)}00&nx=${nx}&ny=${ny}&authKey=${encodeURIComponent(key)}`);
+      calls++; bytes += new TextEncoder().encode(String(r.text || '')).byteLength;
+      const g = r.status === 200 ? pointSnow(r.text) : null;
+      if (g && g.notReady) { waiting++; continue; }                     // 아직 안 나온 발표: 저장 안 함(다음 예약 때)
+      if (g) rows.push({ nx, ny, h: g.h, last_at: g.last_at }); else { fails++; rows.push({ nx, ny, h: null }); }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(POINT_PAR, cells.length) }, worker));
+  const { data: res, error: e2 } = await deps.store.pointPut(plan.tmfc, rows, calls, fails, bytes);
+  if (e2) return json(500, { ok: false, error: 'db' });
+  return json(200, { ok: fails === 0, tmfc: kstHour(plan.tmfc), cells: cells.length, saved: rows.length - fails, fails, waiting, budget, mixed: res ? res.mixed : null });
+}
+
 // 96: 관측 기온 시험 호출 — 20분 전 정시 한 장만 받아 요약(저장 안 함)
 async function probeObs(deps, key) {
   const tmfc = new Date(Math.floor((deps.now() - 1200000) / 3600000) * 3600000).toISOString();
@@ -220,6 +280,10 @@ export async function handle(req, deps) {
   let body = {}; try { body = (await req.json()) || {}; } catch (e) { body = {}; }
   if (Object.prototype.hasOwnProperty.call(body, 'probeAt')) return probeAt(body, deps, key);
   if (!key) { await deps.store.fail('KMA_AUTH_KEY 비밀값이 없음'); return json(200, { ok: false, error: 'no_key' }); }
+  if (body.point) {                                   // 107: 칸 조회(사용량은 서버 point_usage 에 따로)
+    try { return await collectPoint(deps, key); }
+    catch (e) { return json(500, { ok: false, error: 'exception', note: String((e && e.message) || e).split(key).join('***').split(encodeURIComponent(key)).join('***').slice(0, 200) }); }
+  }
   if (body.obs) return body.probe ? probeObs(deps, key) : withUsage(deps, true, (d) => collectObs(d, key), key);      // 96: 사용량은 초단기 쪽에 함께 셈
   if (body.vsrt) return body.probe ? probeVsrt(body, deps, key) : withUsage(deps, true, (d) => collectVsrt(d, key), key);
   if (body.probe) {                                   // 시험 호출: 한 시각만 받아 요약만(저장 안 함)

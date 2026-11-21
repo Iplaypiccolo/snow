@@ -1,7 +1,7 @@
 /* 예상 적설 받기 함수(supabase/functions/collect-forecast/core.mjs) 자동 테스트 — 격자 글에서 지사 격자 고르기, 가짜 DB 로 받기 흐름·다시 받기·시간 제한
    실행: node tests/test_collect_forecast.mjs   (저장소 맨 위 폴더에서) */
 import assert from 'node:assert/strict';
-import { pickCells, kstHour, kstMinute, handle, NX, NY, GRID_URL, VSRT_URL, gridStats } from '../supabase/functions/collect-forecast/core.mjs';
+import { pickCells, kstHour, kstMinute, handle, NX, NY, GRID_URL, VSRT_URL, gridStats, snoValue, pointSnow, POINT_URL } from '../supabase/functions/collect-forecast/core.mjs';
 
 const results = [];
 async function test(name, fn) { try { await fn(); results.push([name, true]); } catch (e) { results.push([name, false, String(e.message).split('\n')[0]]); } }
@@ -329,6 +329,60 @@ await test('96 관측 기온 시험 호출: 20분 전 정시 한 장, 저장 없
   assert.equal((await ocall(oworld(), { obs: true }, 'nope')).status, 401);
 });
 }
+
+// 107: 단기 칸 조회(연 지사 격자 신적설)
+await test('칸 조회 신적설 글자: 소수·미만·없음·이상·모름', () => {
+  assert.deepEqual(['1.4cm', '0.8', '0.5cm미만', '0.5cm 미만', '적설없음', '5.0cm이상', '', null, '강수없음x', 'abc'].map(snoValue), [1.4, 0.8, -0.5, -0.5, 0, 5, null, null, 0, null]);
+});
+const pitem = (d, t, v, c = 'SNO') => ({ baseDate: '20261121', baseTime: '1700', category: c, fcstDate: d, fcstTime: t, fcstValue: v, nx: 60, ny: 127 });
+const pbody = (items, code = '00') => JSON.stringify({ response: { header: { resultCode: code, resultMsg: 'x' }, body: { dataType: 'JSON', items: { item: items }, totalCount: items.length } } });
+await test('칸 조회 응답: 신적설만, 눈 있는 시각만, 1시간 간격 끝까지(4일째 3시간 간격은 뺌)', () => {
+  const g = pointSnow(pbody([pitem('20261121', '1800', '적설없음'), pitem('20261121', '1800', '1', 'PCP'), pitem('20261121', '1900', '1.4cm'), pitem('20261121', '2000', '0.5cm미만'),
+    pitem('20261121', '2100', '적설없음'), pitem('20261122', '0000', '2.0cm'), pitem('20261122', '0300', '3.0cm')]));
+  const e = (iso) => String(Date.parse(iso) / 1000);
+  assert.deepEqual(g.h, { [e('2026-11-21T10:00:00Z')]: 1.4, [e('2026-11-21T11:00:00Z')]: -0.5 });
+  assert.equal(g.last_at, '2026-11-21T12:00:00.000Z');
+  assert.deepEqual(pointSnow(pbody([], '03')), { notReady: true });
+  assert.equal(pointSnow(pbody([pitem('20261121', '1800', '1.0cm')], '10')), null);
+  assert.equal(pointSnow('<OpenAPI_ServiceResponse>'), null);
+  assert.equal(pointSnow(pbody([pitem('20261121', '1800', '1', 'PCP')])), null);
+});
+function pworld(o = {}) {
+  const w = world(); w.pputs = []; w.pplan = { tmfc: '2026-11-21T08:00:00+00:00', cells: [[60, 127], [61, 127], [62, 127]] };
+  Object.assign(w.deps.store, {
+    async pointPlan() { return { data: w.pplan, error: null }; },
+    async pointPut(t, rows, calls, fails, bytes) { w.pputs.push({ t, rows, calls, fails, bytes }); return { data: { ok: true, mixed: true }, error: null }; },
+  });
+  w.resp = (u) => (u.includes('nx=61') ? { status: 502, text: '' } : u.includes('nx=62') ? { status: 200, text: pbody([], '03') } : { status: 200, text: pbody([pitem('20261121', '1800', '0.5cm미만'), pitem('20261121', '1900', '적설없음')]) });
+  Object.assign(w, o);
+  return w;
+}
+await test('칸 조회 받기: 서버가 준 칸만, 발표 시각·칸 번호, 성공·실패·아직 없음 나눠 저장 1번', async () => {
+  const w = pworld(); const r = await call(w, { token: 'tok' }, '{"point":true}');
+  assert.equal(r.status, 200); assert.equal(w.fetched.length, 3);
+  assert.ok(w.fetched.every((u) => u.startsWith(POINT_URL + '?') && u.includes('base_date=20261121&base_time=1700') && u.includes('numOfRows=1100') && u.includes('dataType=JSON')), w.fetched[0]);
+  assert.ok(w.fetched[0].includes('nx=60&ny=127'));
+  assert.equal(w.pputs.length, 1); const p = w.pputs[0];
+  assert.equal(p.t, '2026-11-21T08:00:00+00:00'); assert.equal(p.calls, 3); assert.equal(p.fails, 1);
+  assert.deepEqual(p.rows.map((x) => [x.nx, x.h && Object.values(x.h)]), [[60, [-0.5]], [61, null]]);
+  assert.equal(p.rows[0].last_at, '2026-11-21T10:00:00.000Z');
+  assert.equal(r.j.ok, false); assert.equal(r.j.saved, 1); assert.equal(r.j.fails, 1); assert.equal(r.j.waiting, 1);
+});
+await test('칸 조회 받기: 받을 칸이 없으면 기상청을 부르지 않음, 키는 응답에 없음, 토큰 없으면 401', async () => {
+  const w = pworld(); w.pplan = { tmfc: '2026-11-21T08:00:00+00:00', cells: [] };
+  const r = await call(w, { token: 'tok' }, '{"point":true}');
+  assert.equal(r.j.cells, 0); assert.equal(w.fetched.length, 0); assert.equal(w.pputs.length, 0);
+  const w2 = pworld(); const r2 = await call(w2, { token: 'tok' }, '{"point":true}');
+  assert.ok(!JSON.stringify(r2.j).includes(w2.key));
+  assert.equal((await call(pworld(), {}, '{"point":true}')).status, 401);
+});
+await test('칸 조회 받기: 100초가 넘으면 남은 칸은 다음 예약 때', async () => {
+  const w = pworld(); w.pplan.cells = Array.from({ length: 40 }, (_, i) => [10 + i, 100]);
+  w.deps.fetchText = async (u) => { w.fetched.push(u); w.clock += 5000; return { status: 200, text: pbody([pitem('20261121', '1800', '1.0cm')]) }; };
+  const r = await call(w, { token: 'tok' }, '{"point":true}');
+  assert.equal(r.j.budget, true); assert.ok(w.fetched.length < 40 && w.fetched.length >= 8, String(w.fetched.length));
+  assert.equal(w.pputs[0].rows.length, w.fetched.length);
+});
 
 const ok = results.filter((r) => r[1]).length;
 results.forEach((r) => console.log((r[1] ? 'PASS ' : 'FAIL ') + r[0] + (r[1] ? '' : '  → ' + r[2])));

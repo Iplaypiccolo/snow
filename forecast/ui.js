@@ -9,6 +9,8 @@
    - 격자는 번호 대신 지명(시군구 읍면동, data/grid_names.json — tools/build_grid_names.py 가 만듦)으로 보이고 번호는 작게 곁들임
    - 값(2026-11-04, 마이그레이션 67): 앞 6시간 = 초단기예보(10분마다, 강수·확률·기온. 신적설은 모든 시각 단기예보), 나머지 시각 = 단기예보.
      105(2026-11-21): 초단기 시각 신적설은 날씨누리처럼 초단기 강수형태·강수·기온으로 계산(0.6cm 단위, docs/forecast-snow-point-20261120.md).
+     107(2026-11-21): 6시간 뒤 단기 신적설은 연 지사 격자만 단기 칸 조회 소수 값('0.5cm미만' → '~0.5', 0.8, 1.4). 지사를 열면 서버에 알림(forecast_point_open)
+     → 서버가 그 지사 격자를 받고(몇 초), 30초·100초 뒤 다시 확인해 바뀌었으면 지도·표를 새로 받음. 받기 전·실패 때는 격자 값(정수·'~1')
      서버가 섞어 저장하므로 지사별 요청·편성·확정 값과 같음. 고정 창 표에서 초단기 시각은 색칠(series.vn). 전환 버튼·'발표 기준' 문구는 없앰
    - 격자를 누르면 뜨는 창(컴퓨터 화면만): 제목 줄을 끌어 옮기고, 아래쪽 모서리를 끌어 크기를 바꿈(글자도 같은 비율). 다른 격자를 눌러도 그대로이고 이 브라우저에 기억
    - 서버 읽기: branch_forecast(지사 59줄) 한 번 + 본부를 열 때 forecast_grid(그 본부 지사들의 격자, 수 KB) + 지사를 열 때 그 지사 추이(약 10KB)
@@ -27,8 +29,8 @@
   function fmtHour(iso) { var d = new Date(Date.parse(iso)+9*3600e3); return isNaN(d) ? '-' : kstDateLabel(iso) + ' ' + p2(d.getUTCHours()) + '시'; }
   function r1(v) { return Math.round(v * 10) / 10; }
   function num(v) { return v == null ? '-' : String(r1(v)); }                             // 적설·강수: 격자 값은 정수. 105(2026-11-21): 앞 6시간 신적설은 0.6cm 단위 계산 값 → 소수 한 자리까지
-  // 범위(마이그레이션 62): '1mm·1cm 미만' 시각마다 위쪽 +1 → '0~3', 한 시각뿐이면 '~1'. hi 가 없으면(예전 자료) 아래쪽만
-  function rng(lo, hi) { if (lo == null) return '-'; var a = r1(lo), b = hi == null ? a : r1(hi); return b > a ? (a === 0 && b === 1 ? '~1' : a + '~' + b) : String(a); }
+  // 범위(마이그레이션 62): '1mm·1cm 미만' 시각마다 위쪽 +1 → '0~3', 한 시각뿐이면 '~1'. hi 가 없으면(예전 자료) 아래쪽만. 107: 칸 조회 '0.5cm미만' 은 위쪽 +0.5 → '~0.5'
+  function rng(lo, hi) { if (lo == null) return '-'; var a = r1(lo), b = hi == null ? a : r1(hi); return b > a ? (a === 0 && (b === 1 || b === 0.5) ? '~' + b : a + '~' + b) : String(a); }
   function tmp(v) { return v == null ? '-' : String(Math.round(v * 10) / 10); }                 // 기온(℃): -5, 1.5
   function pct(v) { return v == null ? '-' : String(Math.round(v)); }                             // 강수확률(%): 60
   function hh(iso) { var d = iso ? new Date(iso) : null; return d && !isNaN(d) ? p2(d.getHours()) + '시' : '-'; }
@@ -101,8 +103,8 @@
       S.meta = latest ? { tmfc: latest.issued_at, start: latest.detail && latest.detail.start_at, end: latest.detail && latest.detail.end_at } : null;
     }).catch(function () {});
   }
-  function loadGrid(hq) {
-    if (S.grid[hq]) return Promise.resolve(S.grid[hq]);
+  function loadGrid(hq, fresh) {
+    if (S.grid[hq] && !fresh) return Promise.resolve(S.grid[hq]);
     var ids = st().order.filter(function (id) { return st().branches[id].hq === hq && !JC.isPrivate(hq); });
     if (!ids.length) return Promise.resolve(null);
     return SSAuth.authed('/rest/v1/rpc/forecast_grid', { method: 'POST', body: { p_branches: ids } }).then(function (r) {
@@ -111,8 +113,8 @@
     }).catch(function () { return null; });
   }
   // 지사 하나의 격자별 24시간 추이 { "nx,ny": {s:[24], p:[24], t:[24]} }
-  function loadSeries(id) {
-    if (S.series[id]) return Promise.resolve(S.series[id]);
+  function loadSeries(id, fresh) {
+    if (S.series[id] && !fresh) return Promise.resolve(S.series[id]);
     return SSAuth.authed('/rest/v1/rpc/forecast_grid', { method: 'POST', body: { p_branches: [id], p_series: true } }).then(function (r) {
       if (!r.ok || !r.json || !r.json.cells) return null;
       var m = {}; r.json.cells.forEach(function (c) { if (c[7]) m[c[0] + ',' + c[1]] = c[7]; });
@@ -157,7 +159,7 @@
     function at(k, i) { var a = sr[k]; return a && a[i] != null ? a[i] : null; }
     for (var i = from; i < to; i++) {
       var pt = at('pt', i);      // 98(2026-11-14): 초단기 강수형태 빗방울(5)·빗방울눈날림(6)·눈날림(7)은 날씨누리처럼 양 대신 이름(1 이상이면 양 그대로)
-      rs += mark(pt === 6 || pt === 7 ? (at('s', i) >= 1 ? cellNum(at('s', i), 0, 's') : '<td class="v tr cs1">눈날림</td>') : i < vn && at('s', i) >= 3 ? '<td class="v' + lvAmt('s', 3) + '">3~</td>' : cellNum(at('s', i), at('sq', i) ? 1 : 0, 's'), i, 1);      // 105: 초단기 계산 신적설 3cm 이상은 날씨누리처럼 '3~'
+      rs += mark(pt === 6 || pt === 7 ? (at('s', i) >= 1 ? cellNum(at('s', i), 0, 's') : '<td class="v tr cs1">눈날림</td>') : i < vn && at('s', i) >= 3 ? '<td class="v' + lvAmt('s', 3) + '">3~</td>' : cellNum(at('s', i), +at('sq', i) || 0, 's'), i, 1);      // 105: 초단기 계산 신적설 3cm 이상은 날씨누리처럼 '3~'
       rp += mark(pt === 5 || pt === 6 ? (at('p', i) >= 1 ? cellNum(at('p', i), 0, 'p') : '<td class="v tr cp1">빗방울</td>') : cellNum(at('p', i), at('pq', i) ? 1 : 0, 'p'), i, 1); rt += mark(cellTmp(at('t', i)), i, 1);
       if (hasPop) ro += mark(cellPop(at('r', i)), i, 1);
       if (hasHum) rh += mark(cellHum(at('h', i)), i, 0);
@@ -587,11 +589,32 @@
     S.hq = hq; S.focus = null; S.pin = null; S.pinWhy = null; render(); fitTo();
     if (hq !== 'ALL' && !S.grid[hq]) loadGrid(hq).then(function () { if (S.hq === hq) { render(); fitTo(); } });
   }
+  // 107: 지사를 열면 서버에 알림 → 서버가 그 지사 격자의 단기 칸 조회(신적설 소수)를 받음. 받는 중(pending)이면 30초·100초 뒤
+  //  예보가 바뀌었는지 확인해 바뀌었으면 지도(본부 격자)·지사 추이·열린 격자 표를 새로 받음
+  function pointOpen(id) {
+    SSAuth.authed('/rest/v1/rpc/forecast_point_open', { method: 'POST', body: { p_branch: id } }).then(function (r) {
+      if (!r || !r.ok || !r.json || !r.json.pending) return;
+      var ver = VER.v ? VER.v.c : null, hq = hqOf(id);
+      function again(left) {
+        setTimeout(function () {
+          if (S.focus !== id) return;
+          fcVersion(true).then(function (v) {
+            if (S.focus !== id) return;
+            if (!v || v.c === ver) { if (left > 1) again(left - 1); return; }
+            ver = v.c;
+            Promise.all([loadGrid(hq, true), loadSeries(id, true)]).then(function () { if (S.focus === id) render(); });
+            if (S.tailKey) checkTail(S.tailKey);
+          }).catch(function () {});
+        }, left > 1 ? 30000 : 70000);
+      }
+      again(2);
+    }).catch(function () {});
+  }
   function focusBranch(id) {
     var hq = hqOf(id); if (!hq) return;
     S.pin = null; S.pinWhy = null;
     if (S.focus === id) { S.focus = null; render(); fitTo(); return; }
-    S.hq = hq; S.focus = id; render();
+    S.hq = hq; S.focus = id; render(); pointOpen(id);
     Promise.all([loadGrid(hq), loadSeries(id)]).then(function () {
       if (S.focus !== id) return;
       var a = S.pin ? null : autoPick(id); if (a) { S.pin = a.key; S.pinWhy = a.why; S.pinAt = Date.now(); }      // 눈여겨볼 격자를 고른 채로 엶

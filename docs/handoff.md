@@ -44,6 +44,17 @@
 
 ## 기록 (최신이 맨 위)
 
+### 2026-11-21 · 커밋 (이 기록 커밋 하나) · 6시간 뒤 신적설 칸 조회 소수(107)·'비/눈' 시각 '-'(106), 초단기 늦게 받는 원인
+- **서버 변경**(사용자 "106 적용해", "가 적용해"):
+  - 마이그레이션 106 — 단기 '비/눈' 시각 신적설 '~1' → '-'(fc_apply).
+  - 마이그레이션 107 — 표 `private.point_snow`·`point_want`·`point_usage`, 함수 `forecast_point_open`(화면)·`forecast_point_plan`·`forecast_point_put`(수집 함수)·`private.point_tmfc`·`point_targets`·`kick_point`, 예약 `collect-point`(10분마다 2분). fc_apply·forecast_cell_detail_calc 가 칸 조회 값이 있으면 그 값을 씀. series.sq 가 0/1/0.5(위쪽 폭)로 바뀜.
+  - collect-forecast v11 배포: `{"point":true}` 칸 조회 받기(8개 동시, 100초, 4,000번/일). 시험 `tests/test_collect_forecast.mjs` 60/60.
+- 화면(forecast/ui.js): 지사를 열면 `forecast_point_open`, 받는 중이면 30·100초 뒤 확인해 새로 받음. '~0.5' 표시. 시험 `t_point_snow_decimal` 추가, 모의 서버에 `forecast_point_open`.
+- 확인: 눈 많은 지사(B038, 41칸) 임시로 열어 41/41 성공·섞임 → 임시 기록 지움. 지금 6시간 뒤 눈 있는 곳이 전국에 없어 화면 숫자 대조는 다음 눈 때.
+- **원인 찾음(초단기 늦게 받음)**: 수집 예약이 발표 8분 뒤라 그 발표가 아직 없음 → 평소 화면은 발표 18~28분 뒤 값, 11/21 09시는 기상청이 느려 2분 제한까지 겹쳐 09:38 까지 08:50 값. 고칠 방법(5분마다 확인) 제안, 사용자 확인 대기. 자세한 것: `docs/forecast-snow-point-20261120.md` 6.
+- 남은 일: 초단기 5분 확인(사용자 결정), 3시간 표 첫 칸 기온 1℃ 차이 원인, 눈 오는 날 6시간 뒤 칸 조회 소수 날씨누리 대조.
+— ✍ Claude Code 작성
+
 ### 2026-11-21 · 커밋 (이 기록 커밋 하나) · 앞 6시간 신적설 날씨누리처럼 계산(105), 화면 소수 표시
 - **서버 변경**: 마이그레이션 105(사용자 "적용해") — `private.fc_vsrt_snow(강수,기온)` 새 함수, `private.fc_apply` 의 초단기 시각 신적설을 계산 값으로(초단기 시각은 '~1' 없음). 격자 상세 저장분 지움. 적용 뒤 16:29 다시 계산되어 앞 6시간 눈 칸 196곳.
 - 화면(forecast/ui.js): 신적설·합계를 소수 한 자리까지(`num`·`rng`), 초단기 시각 3 이상은 '3~'. 시험 `t_vsrt_snow_decimal` 추가. 전체 시험 639/639.

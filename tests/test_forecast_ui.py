@@ -907,6 +907,20 @@ def t_vsrt_snow_decimal(b):
 
 TESTS += [t_vsrt_snow_decimal]
 
+def t_point_snow_decimal(b):
+    """2026-11-21(마이그레이션 107): 6시간 뒤 신적설은 칸 조회 소수 값 — '0.5cm미만'(sq 0.5) → '~0.5', 1.4 → '1.4', 격자 '1cm 미만'(sq 1)은 그대로 '~1'.
+    지사를 열면 서버에 칸 조회를 알림(forecast_point_open)"""
+    p,m=open_page(b);d=m.fc_cells[0][2][0]
+    J(p,"""(() => {const old=SSAuth.authed;SSAuth.authed=function(path,options){return old.apply(this,arguments).then(r=>{if(path.includes('/forecast_cell_detail')&&r.json&&r.json.upper){const s=r.json.upper.series;s.s=Array(24).fill(0);s.sq=Array(24).fill(0);s.sq[8]=0.5;s.s[9]=1.4;s.sq[10]=1;s.pt=null;s.vn=6;}return r;});};return null;})()""")
+    J(p,f"SSOpenForecast('{d}')");p.locator('.fc-detail tbody tr').first.click()
+    p.wait_for_function("document.querySelectorAll('#fc-pin thead tr:last-child th:not(.lb)').length===48")
+    sn=p.locator('#fc-pin tbody tr').nth(0).locator('td')
+    got=[sn.nth(i).inner_text() for i in (7,8,9,10)]
+    check(got==['-','~0.5','1.4','~1'],f'칸 조회 소수·0.5cm미만 {got}')
+    check(d in getattr(m,'point_opens',[]),f'지사를 열면 칸 조회 알림 {getattr(m,"point_opens",None)}')
+
+TESTS += [t_point_snow_decimal]
+
 def t_value_colors(b):
     """2026-11-15 사용자: 3시간 표 신적설·강수강도의 옅은 파란 바탕 없앰, 1시간·3시간 표 칸 색이 값에 따라 바뀜(신적설·강수·강수확률·기온·습도). 0·없음은 색 없음.
     2026-11-16 사용자: 강수·강수강도·강수확률·습도도 파랑, 진하면 흰 글자. 기온 -5 이하·0 미만·0~4(색 없음)·4~10·10 이상, 습도 20 미만(건조)·20마다(20~40 색 없음)"""
