@@ -5,7 +5,7 @@
 ## 구조
 
 ```
-index.html              페이지 골격 (데이터는 fetch로 불러옴). 맨 위 탭으로 '강설량 측정' / '장비 지원' 전환
+index.html              페이지 골격 (데이터는 fetch로 불러옴). 장비 지원 페이지는 2026-11-21 없앰(docs/equipment-archive.md)
 app.js                  화면 로직 (지도, 표, 탭 전환, 업로드 병합 등)
 data/roads.json         고속도로 노선 좌표 (거의 변경 없음)
 data/hierarchy.json     본부/지사/관측소 배정 정보 (거의 변경 없음)
@@ -26,7 +26,6 @@ tools/build_jurisdiction.py  구간 생성 도구 (표준노드링크에서 걸�
 tools/add_unassigned_sections.py  미지정 고속도로(어느 지사에도 속하지 않은 도로) 구간 추가 도구
 docs/unassigned-sections-report.md  미지정 구간 생성 결과
 
-equipment/              장비 지원 페이지 (index.html 의 '장비 지원' 탭에 표시됨)
   index.html              화면 틀
   css/style.css           디자인 (색, 글자, 배치)
   js/sample-data.js       샘플 데이터 (가상 차량번호·가짜 운전원. 실제 데이터 아님)
@@ -71,9 +70,9 @@ tests/test_login_gate.py    첫 화면 로그인 잠금·자동 로그인·아�
 tests/test_hierarchy_order.py  본부·지사 순서가 강설량 측정 화면과 같은지 실제 자료로 확인(6항목)
 tests/_sb_mock.py          가짜 Supabase 서버(화면 시험용)
 docs/jurisdiction-build-report.md  구간 생성·끝점 보정 결과 보고서
-docs/equipment-rules.md   장비 지원 페이지 동작 규칙 (사람이 읽는 문서: 권한 표, 저장·로그·개인정보 규칙)
+docs/equipment-archive.md 장비 지원 페이지 보관 문서 (2026-11-21 없앰: 코드 위치·서버 구조·다시 만드는 법)
+docs/equipment-rules.md   장비 지원 페이지 동작 규칙 (보관용)
 docs/decisions.md         결정 사항과 배경 (서버 이전 계획, 개인정보 메모 등. 작업 이어가기용)
-tests/test_equipment.py   장비 지원 페이지 자동 테스트
 tests/test_grid_core.js  격자 계산 자동 테스트 (node tests/test_grid_core.js)
 tests/test_grid_ui.py    격자 편입 탭 화면 자동 테스트
 tests/test_jurisdiction_core.js  관할 변경 계산 자동 테스트 (node tests/test_jurisdiction_core.js)
@@ -82,17 +81,9 @@ tests/test_reapply.js       저장 후 새로고침 없이 다시 적용하는 �
 tests/test_jurisdiction_ui.py    관할 변경 탭 화면 자동 테스트
 ```
 
-## 장비 지원 페이지 확인 방법
+## 장비 지원 페이지 (2026-11-21 없앰)
 
-- **그냥 열어보기**: `equipment/index.html` 을 더블클릭하면 브라우저에서 열립니다. (상단 "접속 아이디(데모)"로 역할을 바꿔 볼 수 있습니다)
-- **자동 테스트** (수정 후 "전과 똑같이 동작하는지" 확인):
-  ```
-  pip install playwright
-  playwright install chromium
-  python tests/test_equipment.py
-  ```
-  `15/15 통과` 처럼 나오면 정상입니다. 하나라도 `FAIL` 이면 어디가 틀렸는지 함께 표시됩니다.
-- 현재는 샘플 데이터이며 **저장해도 새로고침하면 사라집니다.** (서버 미연결)
+화면과 서버 자료를 지웠습니다. 다시 만들 때는 `docs/equipment-archive.md` 를 보세요.
 
 ## 데이터 갱신 방식 — 서버 자동 수집
 

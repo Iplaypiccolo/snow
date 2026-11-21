@@ -40,12 +40,10 @@ SUITES = [
     ('예보3시간 연결 계산', 'tests/test_forecast_series.js', 'node'),
     ('격자 계산', 'tests/test_grid_core.js', 'node'),
     ('고속도로 2km 격자 생성', 'tests/test_section_grid_geometry.py', 'py'),
-    ('장비 인원·엑셀 계산', 'tests/test_equipment_crew_core.js', 'node'),
     ('본부·지사 순서 일치', 'tests/test_hierarchy_order.py', 'py'),
     ('구간 연속성·무결성', 'tests/test_sections_continuity.py', 'py'),
     ('화면 파일 꼬리표(캐시)', 'tests/test_asset_stamps.py', 'py'),
     # 긴 묶음을 먼저 시작하고 인트로는 초기 계산 시험의 부하가 지난 뒤 실행한다.
-    ('장비 지원 화면', 'tests/test_equipment.py', 'ui'),
     ('관리 콘솔 화면', 'tests/test_admin_ui.py', 'ui'),
     ('로그인 잠금 화면', 'tests/test_login_gate.py', 'ui'),
     ('사용법 안내', 'tests/test_guide.py', 'ui'),
@@ -54,7 +52,6 @@ SUITES = [
     ('구간 변경 요청 화면', 'tests/test_jurisdiction_requests.py', 'ui'),
     ('격자 편입 화면', 'tests/test_grid_ui.py', 'ui'),
     ('기관별 24시간 예보 화면', 'tests/test_forecast_ui.py', 'ui'),
-    ('장비 인원 선택·다운로드 화면', 'tests/test_equipment_crew.py', 'ui'),
 ]
 RESULT_RE = re.compile(r'(\d+)\s*/\s*(\d+)\s*통과')
 

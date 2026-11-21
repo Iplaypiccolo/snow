@@ -169,39 +169,14 @@ def t_server_trouble_keeps_login(b, ctx, m):
     p.route("**/auth/v1/token?grant_type=password", lambda r: r.fulfill(status=500, content_type="application/json", body="{}"))
     res = p.evaluate("SSAuth.login('admin-01', 'x')"); check(res["reason"] == "network" and "비밀번호" not in res["message"], f"로그인 500: {res}")
 
-def t_equipment_gate(b, ctx, m):
-    ctx_new = b.new_context()
-    try:
-        p = ctx_new.new_page(); p.route("**/*", T.route); p.goto(T.URL.replace("index.html", "equipment/index.html"), wait_until="commit"); p.wait_for_timeout(800)   # 안내만 보이고 나머지 불러오기를 멈추므로 load 이벤트를 기다리지 않음
-        check("로그인이 필요합니다" in p.locator("body").inner_text() and p.locator(".tab").count() == 0, "로그인 없이 직접 열면 안내만")
-        check(p.locator("a[target=_top]").get_attribute("href") == "../", "첫 화면으로 가는 링크")
-    finally: ctx_new.close()
-    p = open_site(ctx, m); typed_login(p, "admin-01", SBM.ADMIN_PW); p.wait_for_selector(".topnav", state="visible"); p.click(".page-btn[data-page=equip]"); p.wait_for_timeout(1200)
-    check(p.frame_locator("#equipFrame").locator(".tab").count() >= 3, "로그인한 뒤 첫 화면에서 들어가면 장비 지원 화면이 열려야 함")
-
-def t_logout_from_equip_then_login_starts_first_screen(b, ctx, m):
-    """(사용자 신고 2026-10-05) 장비 지원에서 로그아웃한 뒤 다시 로그인하면 '첫 화면으로 가서 로그인하세요'만 계속 나옴
-       → 로그아웃하면 주소의 #equip 을 지우고, 다시 로그인하면 항상 첫 화면(강설량 측정)부터. 장비 지원은 로그인한 뒤에만 불러옴"""
-    p = open_site(ctx, m); typed_login(p, "admin-01", SBM.ADMIN_PW); p.wait_for_selector(".topnav", state="visible")
-    p.click(".page-btn[data-page=equip]"); p.wait_for_timeout(1200)
-    for _ in range(24):   # 바쁜 시험 컴퓨터에서는 주소 바뀌는 데 조금 더 걸림(최대 6초)
-        if p.url.endswith("#equip"): break
-        p.wait_for_timeout(200)
-    check(p.url.endswith("#equip"), "장비 지원을 열면 주소에 #equip: " + p.url + " / 보이는 화면: " + str(p.evaluate("[...document.querySelectorAll('.page-btn')].map(b=>b.dataset.page+(b.classList.contains('active')?'*':'')).join()")))
+def t_old_equip_address(b, ctx, m):
+    """2026-11-21 장비 지원 페이지를 없앰: 장비 지원 주소(equipment/index.html)는 없고, 예전 주소(#equip)로 열어도 로그인 뒤 첫 화면(강설량 측정)"""
+    p = open_site(ctx, m)
+    p.goto(T.URL + "?again=1#equip"); p.wait_for_selector("#ssU", timeout=20000)
+    typed_login(p, "admin-01", SBM.ADMIN_PW); p.wait_for_selector(".topnav", state="visible"); p.wait_for_timeout(500)
+    check(p.locator("#page-snow").is_visible() and "#equip" not in p.url and p.locator("#equipFrame").count() == 0 and p.locator(".page-btn").count() == 0, "예전 주소로 열어도 첫 화면부터, 장비 지원 틀 없음")
     p.click("#ssLogout"); p.wait_for_selector("#ssU", timeout=20000); p.wait_for_timeout(300)
     check(any("scope=local" in u for u in getattr(m, "logout_urls", [])), "로그아웃은 이 접속만(같은 아이디의 다른 접속은 유지): " + str(getattr(m, "logout_urls", [])))
-    check("#equip" not in p.url and not p.locator("#equipFrame").get_attribute("src"), "로그아웃하면 #equip 없이, 장비 지원은 아직 안 불러옴")
-    typed_login(p, "admin-01", SBM.ADMIN_PW); p.wait_for_selector(".topnav", state="visible"); p.wait_for_timeout(500)
-    check(p.locator("#page-snow").is_visible() and p.locator(".page-btn[data-page=snow]").get_attribute("class").find("active") >= 0, "다시 로그인하면 첫 화면(강설량 측정)")
-    p.click(".page-btn[data-page=equip]"); p.wait_for_timeout(1500)
-    fr = p.frame_locator("#equipFrame")
-    check(fr.locator(".tab").count() >= 3 and "로그인이 필요합니다" not in fr.locator("body").inner_text(), "장비 지원이 정상으로 열림")
-    # 예전 주소(#equip)로 바로 열어도 로그인 전에는 장비 지원을 불러오지 않고, 로그인하면 첫 화면부터
-    p.click("#ssLogout"); p.wait_for_selector("#ssU", timeout=20000)
-    p.goto(T.URL + "?again=1#equip"); p.wait_for_selector("#ssU", timeout=20000)      # 새로 불러오기(같은 주소에 #만 바꾸면 다시 불러오지 않음)
-    check(not p.locator("#equipFrame").get_attribute("src"), "로그인 전에는 장비 지원을 불러오지 않음")
-    typed_login(p, "admin-01", SBM.ADMIN_PW); p.wait_for_selector(".topnav", state="visible"); p.wait_for_timeout(500)
-    check(p.locator("#page-snow").is_visible() and "#equip" not in p.url, "예전 주소로 열어도 첫 화면부터")
 
 def t_snow_snapshot_cached(b, ctx, m):
     """적설 요약본은 시즌별(마이그레이션 31)이고 이 브라우저에 보관: 처음엔 목록 + 최근 시즌만 받고, 다시 열 때는 만든 시각만 묻고 같으면 받지 않음(무료 내려받기 한도 절약)"""
@@ -223,7 +198,7 @@ def t_no_secrets_and_safe_text(b, ctx, m):
     check("Xss#Pass" not in p.evaluate("document.body.innerHTML"), "화면 어디에도 비밀번호가 없어야 함")
 
 TESTS = [t_locked_before_login, t_wrong_and_empty, t_login_session_only, t_remember_id, t_auto_login, t_auto_login_expired, t_server_revoked, t_special_accounts,
-         t_branch_set_by_admin_enters_main_directly, t_cross_tab_logout, t_network_problems, t_server_trouble_keeps_login, t_equipment_gate, t_logout_from_equip_then_login_starts_first_screen, t_snow_snapshot_cached, t_no_secrets_and_safe_text]
+         t_branch_set_by_admin_enters_main_directly, t_cross_tab_logout, t_network_problems, t_server_trouble_keeps_login, t_old_equip_address, t_snow_snapshot_cached, t_no_secrets_and_safe_text]
 if __name__ == "__main__":
     with sync_playwright() as pw:
         b = pw.chromium.launch()

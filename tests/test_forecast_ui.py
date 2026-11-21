@@ -85,8 +85,8 @@ def t_levels(b):
     p.click(f"#fc-tree [data-fcbr='{d}']"); p.wait_for_timeout(500); check(labels(p) == 0 and layers(p) > n, "지사를 다시 누르면 본부 보기로")
     p.click("#fc-tree [data-fchq='강원']"); p.wait_for_timeout(500); check(layers(p) == 0, "본부를 다시 누르면 전체(노선만)")
 
-def t_open_from_equipment(b):
-    """장비 지원 화면에서 그 지사로 바로 오기: SSOpenForecast(바깥 화면 함수)와 #fc=지사번호 주소"""
+def t_open_branch_direct(b):
+    """그 지사로 바로 오기: SSOpenForecast(첫 화면 함수)와 #fc=지사번호 주소(2026-11-21 장비 지원을 없애 이름 바꿈)"""
     p, m = open_page(b)
     d = bid(p, "춘천")
     J(p, f"(() => {{ SSOpenForecast('{d}'); return null }})()"); p.wait_for_timeout(1200)
@@ -230,21 +230,19 @@ def t_auto_pick(b):
     case(s4, "④ 최저 4℃ 이하"); case(s5, "해당 없음")
 
 def t_top_menu(b):
-    """위쪽 메뉴(2026-10-10): 1줄 페이지 전환(강설량 측정/장비 지원), 2줄은 그 페이지의 메뉴만. 장비 메뉴는 안쪽 화면의 탭을 대신 누름(안쪽 머리글은 숨김)"""
+    """위쪽 메뉴: 1줄 로고·계정, 2줄 강설량 측정 메뉴. 2026-11-21 장비 지원 페이지를 없애 페이지 전환·장비 메뉴·기준일자 칸도 없음"""
     p, m = open_page(b); p.wait_for_timeout(500)
-    check(p.locator(".topnav").is_visible() and p.locator(".shell").get_attribute("data-page") == "snow", "위쪽 메뉴, 처음은 강설량 측정")
-    check(p.locator(".tab-btn[data-tab=map]").is_visible() and not p.locator(".eq-btn[data-eqtab=move]").is_visible(), "강설량 페이지에서는 강설량 메뉴만")
+    check(p.locator(".topnav").is_visible() and p.locator(".shell").get_attribute("data-page") == "snow", "위쪽 메뉴, 강설량 측정")
+    check(p.locator(".tab-btn[data-tab=map]").is_visible() and p.locator(".page-btn").count() == 0 and p.locator(".eq-btn").count() == 0
+          and p.locator("#page-equip").count() == 0 and p.locator("#equipFrame").count() == 0 and p.locator("#eqRoundWide, #eqRoundRow, #snTheme, #snReload").count() == 0,
+          "장비 지원 메뉴·페이지 전환·기준일자 칸 없음")
     check(p.evaluate("getComputedStyle(document.body).fontFamily").lstrip('"').startswith('Pretendard') and p.evaluate("document.fonts.check('700 14px Pretendard')"), "글꼴 Pretendard(사이트 안 파일)")
-    p.click(".page-btn[data-page=equip]"); p.wait_for_timeout(2500)
-    check(p.locator(".eq-btn[data-eqtab=move]").is_visible() and not p.locator(".tab-btn[data-tab=map]").is_visible() and p.locator("#eqLogBtn").is_visible(), "장비 지원 페이지에서는 장비 메뉴만(관리자는 로그 기록도)")
-    p.click(".eq-btn[data-eqtab=branch]"); p.wait_for_timeout(800)
-    fr = p.frame_locator("#equipFrame")
-    check(fr.locator(".tab[data-tab=branch]").get_attribute("aria-selected") == "true" and fr.locator("#panel-branch").is_visible(), "지사별 요청·편성이 열림")
-    check(not fr.locator(".topbar").is_visible() and "active" in p.locator(".eq-btn[data-eqtab=branch]").get_attribute("class"), "안쪽 머리글은 숨기고 메뉴에 표시")
-    p.click(".eq-btn[data-eqtab=move]"); p.wait_for_timeout(500)
-    check(fr.locator("#panel-move").is_visible() and not fr.locator("#panel-branch").is_visible(), "이동 현황으로 바뀜")
-    p.click(".page-btn[data-page=snow]"); p.wait_for_timeout(300); p.click(".tab-btn[data-tab=snowtable]"); p.wait_for_timeout(400)
-    check(p.locator("#page-snow").is_visible() and not p.locator("#page-equip").is_visible() and p.locator("#view-snowtable").is_visible(), "강설량 측정으로 돌아와 메뉴 고르기")
+    p.click(".tab-btn[data-tab=snowtable]"); p.wait_for_timeout(400)
+    check(p.locator("#page-snow").is_visible() and p.locator("#view-snowtable").is_visible(), "메뉴 고르기")
+    p.click(".tab-btn[data-tab=map]"); p.wait_for_timeout(500)
+    p.go_back(); p.wait_for_timeout(400)
+    check("active" in p.locator(".tab-btn[data-tab=snowtable]").get_attribute("class") and p.locator("#view-snowtable").is_visible(), "뒤로가기 = 이전 탭")
+    p.click(".tab-btn[data-tab=snowtable]"); p.wait_for_timeout(300)
     an = "getComputedStyle(document.getElementById('view-snowtable')).animationName"
     check(p.evaluate(an) == "ssFade", "움직임 4: 화면 바꿀 때 0.15초 나타나기")
     p.emulate_media(reduced_motion="reduce"); p.wait_for_timeout(100)
@@ -253,7 +251,7 @@ def t_top_menu(b):
     box = p.locator(".tn-tabs").bounding_box()
     check(p.locator(".tab-btn[data-tab=forecast]").is_visible() and box and box["width"] <= 390 and p.evaluate("document.documentElement.scrollWidth <= 392"), "휴대폰 폭: 메뉴 줄은 옆으로 밀어 보기, 화면은 가로로 넘치지 않음")
 
-TESTS = [t_pin_chart, t_first_tab_and_order, t_levels, t_open_from_equipment, t_branch_user_can_view, t_legend_show, t_auto_pick, t_top_menu]
+TESTS = [t_pin_chart, t_first_tab_and_order, t_levels, t_open_branch_direct, t_branch_user_can_view, t_legend_show, t_auto_pick, t_top_menu]
 
 def t_blend_no_toggle(b):
     """2026-11-04(60): 전환 버튼 없음. 서버가 앞 6시간 초단기(신적설은 단기) + 나머지 단기로 섞어 둔 값을 그대로 — 고정 창 표의 앞 6시각 전부 색칠, 신적설은 단기"""
@@ -366,108 +364,15 @@ def t_phone_fit(b):
     pin = box("#fc-pin"); mobile=box('#fc-mobile'); check(not p.locator("#fc-pin .fc-pin-grip.r").is_visible() and J(p, "document.querySelector('.fc-pin-in').style.zoom") == "" and mobile[0] == 8 and mobile[1] == 367 and pin[0]>=mobile[0] and pin[1]<=mobile[1], f"모바일: 크기 조절 없음, 공통 창 안 화면 폭에 맞음 {pin}")
     fits("모바일 기억값 무시")
 
-def t_eq_round_bar(b):
-    """2026-11-03: 기준일자는 위쪽 메뉴에 늘 보임(노란 칸). 넓은 화면 = 탭 줄 오른쪽, 좁으면 [+]로 삭제·만들기, 휴대폰 = 사용법 아래. 탭을 가리지 않음"""
-    p, m = open_page(b)
-    p.click(".page-btn[data-page=equip]"); p.wait_for_timeout(2000); fr = p.frame("equipFrame") or p.frames[1]
-    frame = next(f for f in p.frames if "equipment/index.html" in f.url)
-    wide, row = p.locator("#eqRoundWide"), p.locator("#eqRoundRow")
-    def no_cover():
-        tabs = J(p, """[...document.querySelectorAll('.eq-btn')].filter(e => e.offsetParent).map(e => e.getBoundingClientRect()).map(r => [r.left, r.right, r.top, r.bottom])""")
-        boxes = J(p, """[...document.querySelectorAll('.eq-round, .eq-reload')].filter(e => e.offsetParent).map(e => e.getBoundingClientRect()).map(r => [r.left, r.right, r.top, r.bottom])""")
-        hit = [(t, x) for t in tabs for x in boxes if t[0] < x[1] - 1 and x[0] < t[1] - 1 and t[2] < x[3] - 1 and x[2] < t[3] - 1]
-        check(not hit, f"탭을 가리지 않음: {hit[:2]}")
-    # 넓은 화면(1600): 탭 줄에 전부
-    p.set_viewport_size({"width": 1600, "height": 900}); p.wait_for_timeout(200)
-    check(wide.locator(".eq-round-sel").is_visible() and not row.is_visible() and wide.locator("[data-rd=make]").is_visible() and wide.locator("[data-rd=del]").is_visible() and not wide.locator("[data-rd=more]").is_visible(), "1600: 탭 줄에 기준일자·삭제·만들기")
-    no_cover()
-    check(J(p, "getComputedStyle(document.querySelector('#eqRoundWide .eq-round-sel')).backgroundColor") == "rgb(255, 243, 176)", "기준일자 칸 하이라이트")
-    check(not frame.locator("#branchRound").is_visible(), "안쪽 탭의 기준일자 줄은 숨김")
-    for t in ("branch", "fleet", "alloc", "move"):
-        p.click(f".eq-btn[data-eqtab={t}]"); p.wait_for_timeout(200); check(wide.locator(".eq-round-sel").is_visible(), f"{t} 탭에서도 보임")
-    # 안쪽 화면과 같은 기준일자
-    rid = frame.evaluate("S.round"); check(wide.locator(".eq-round-sel").input_value() == str(rid), "안쪽 화면과 같은 기준일자")
-    # 만들기·고르기·삭제
-    d = frame.evaluate("addDays(nextRoundMin(), 3)"); wide.locator("[data-rd=date]").fill(d); wide.locator("[data-rd=make]").click(); p.wait_for_timeout(600)
-    r2 = frame.evaluate("S.round"); check(r2 != rid and frame.evaluate("curRound().start_date") == d and wide.locator(".eq-round-sel").input_value() == str(r2), f"만들기: {d}")
-    wide.locator(".eq-round-sel").select_option(str(rid)); p.wait_for_timeout(500); check(frame.evaluate("S.round") == rid, "고르면 안쪽 화면도 바뀜")
-    wide.locator(".eq-round-sel").select_option(str(r2)); p.wait_for_timeout(500); wide.locator("[data-rd=del]").click(); p.wait_for_timeout(600)
-    check("지우지 못했습니다" in frame.locator("#toast").inner_text(), "삭제 버튼 → 안쪽 화면의 기준일자 삭제까지 이어짐(이 가짜 서버는 삭제를 막음, 실제 삭제 규칙은 test_equipment): " + frame.locator("#toast").inner_text())
-    # 중간(1366): 탭 줄에 기준일자와 [+], 삭제·만들기는 눌러야
-    p.set_viewport_size({"width": 1366, "height": 800}); p.wait_for_timeout(200); no_cover()
-    check(wide.locator(".eq-round-sel").is_visible() and wide.locator("[data-rd=more]").is_visible() and not wide.locator("[data-rd=make]").is_visible() and not row.is_visible(), "1366: 기준일자와 [+]만")
-    top0 = p.locator("#equipFrame").bounding_box()["y"]; wide.locator("[data-rd=more]").click(); p.wait_for_timeout(150); no_cover()
-    check(row.is_visible() and row.locator("[data-rd=make]").is_visible() and row.locator("[data-rd=del]").is_visible() and not row.locator(".eq-round-sel").is_visible(), "[+]: 삭제·만들기 줄이 펼쳐짐")
-    check(p.locator("#equipFrame").bounding_box()["y"] > top0, "표를 가리지 않고 아래로 밂")
-    wide.locator("[data-rd=more]").click(); p.wait_for_timeout(100); check(not row.is_visible(), "다시 누르면 닫힘")
-    # 휴대폰: 사용법 아래에 드롭다운과 [+]
-    p.set_viewport_size({"width": 390, "height": 844}); p.wait_for_timeout(250); no_cover()
-    check(row.locator(".eq-round-sel").is_visible() and row.locator("[data-rd=more]").is_visible() and not row.locator("[data-rd=make]").is_visible() and not wide.is_visible(), "휴대폰: 드롭다운과 [+]만")
-    rb = row.bounding_box(); ub = p.locator(".tn-row").bounding_box(); tb = p.locator(".tn-tabs").bounding_box()
-    check(rb["y"] >= ub["y"] + ub["height"] - 1 and rb["y"] + rb["height"] <= tb["y"] + 1 and rb["x"] + rb["width"] <= 391, f"머리글 아래, 탭 위: {ub} {rb} {tb}")
-    # 2026-11-03: 화면·사용법·계정 줄은 [▾]로 접고 폄(처음 접힘), 페이지 전환 옆. 새로고침과 기준일자는 늘 보임
+def t_phone_account_fold(b):
+    """2026-11-03: 휴대폰은 사용법·계정 줄을 [▾]로 접고 폄(처음 접힘). 탭을 가리지 않고 화면이 옆으로 밀리지 않음"""
+    p, m = open_page(b); p.set_viewport_size({"width": 390, "height": 844}); p.wait_for_timeout(400)
     more = p.locator("#tnMore"); user = p.locator("#ssUser")
-    check(more.is_visible() and not user.is_visible() and not p.locator("#snTheme").is_visible() and p.locator("#snReload").is_visible(), "처음엔 접힘, 새로고침은 보임")
-    mb = more.bounding_box(); pb = p.locator(".tn-pages").bounding_box()
-    check(abs((mb["y"] + mb["height"] / 2) - (pb["y"] + pb["height"] / 2)) <= 3 and mb["x"] >= pb["x"] + pb["width"] - 1 and mb["x"] + mb["width"] <= 391, f"페이지 전환 옆: {pb} {mb}")
+    check(more.is_visible() and not user.is_visible(), "처음엔 접힘")
     check(J(p, "document.scrollingElement.scrollWidth") <= 390, "화면이 옆으로 밀리지 않음")
     y0 = p.locator(".tn-tabs").bounding_box()["y"]; more.click(); p.wait_for_timeout(100)
-    check(user.is_visible() and p.locator("#snTheme").is_visible() and more.get_attribute("aria-expanded") == "true" and p.locator(".tn-tabs").bounding_box()["y"] > y0, "누르면 펴지고 탭을 아래로 밂")
-    more.click(); p.wait_for_timeout(100); check(not user.is_visible() and p.locator(".tn-tabs").bounding_box()["y"] == y0, "다시 누르면 접힘"); no_cover()
-    rb = row.bounding_box(); tb = p.locator(".tn-tabs").bounding_box()
-    tabs_y = tb["y"]; row.locator("[data-rd=more]").click(); p.wait_for_timeout(150); no_cover()
-    check(row.locator("[data-rd=make]").is_visible() and p.locator(".tn-tabs").bounding_box()["y"] > tabs_y and J(p, "document.scrollingElement.scrollWidth") <= 390, "[+]: 탭을 아래로 밀며 펼침(가리지 않음)")
-    check(p.locator(".eq-btn[data-eqtab=branch]").is_visible(), "탭 그대로")
-    check(p.locator(".page-btn").all_inner_texts() == ["장비 지원", "강설량 측정"], "2026-11-03: 장비 지원이 앞")
-    row.locator("[data-rd=more]").click(); p.wait_for_timeout(100)
-    # 강설량 측정에서는 안 보임
-    p.click(".page-btn[data-page=snow]"); p.wait_for_timeout(200); check(not row.is_visible() and not wide.is_visible(), "강설량 측정에서는 안 보임")
-
-def t_eq_round_no_edit(b):
-    """권한 없는 계정: 드롭다운만, [+] 없음"""
-    p, m = open_page(b, user="exchungju")
-    p.click(".page-btn[data-page=equip]"); p.wait_for_timeout(2000)
-    w = p.locator("#eqRoundWide"); check(w.locator(".eq-round-sel").is_visible() and w.locator("[data-rd=more]").count() == 0 and w.locator("[data-rd=make]").count() == 0, "드롭다운만")
-
-def t_first_page_equip(b):
-    """2026-11-03: 로그인 뒤 첫 화면 = 장비 지원. 강설량 측정은 처음 열 때 자료를 받고 지도가 제대로 그려짐. 뒤로가기 끝도 장비 지원"""
-    T.FIRST["snow"] = False
-    try:
-        p, m = open_page(b); p.wait_for_timeout(1500)
-        frame = next(f for f in p.frames if "equipment/index.html" in f.url)
-        check(p.locator("#shell").get_attribute("data-page") == "equip" and "active" in p.locator(".page-btn[data-page=equip]").get_attribute("class") and "active" not in p.locator(".page-btn[data-page=snow]").get_attribute("class"), "첫 화면 = 장비 지원")
-        check(p.locator("#page-equip").is_visible() and not p.locator("#page-snow").is_visible() and p.locator(".eq-btn[data-eqtab=move]").is_visible() and not p.locator(".tab-btn[data-tab=map]").is_visible(), "장비 지원 메뉴")
-        frame.wait_for_selector("#matrix tbody tr", timeout=20000); check(p.locator(".eq-btn[data-eqtab=move]").get_attribute("class").count("active") == 1, "첫 탭 = 이동 현황")
-        check(not m.fc_calls and J(p, f"{S}.map === null"), "강설량 측정 자료·지도는 아직 안 만듦")
-        p.click(".page-btn[data-page=snow]"); p.wait_for_timeout(1200)
-        check(p.locator("#view-forecast").is_visible() and "active" in p.locator(".tab-btn[data-tab=forecast]").get_attribute("class"), "강설량 측정 = 기관별 예보부터")
-        check(J(p, f"{S}.map.getSize().x") > 300 and J(p, f"{S}.lines.getLayers().length") > 900 and p.locator("#fc-tree [data-fchq]").count() == 9, "지도·목록이 제대로 그려짐")
-        p.click(".tab-btn[data-tab=map]"); p.wait_for_timeout(900)
-        size = J(p, "(() => { const m = document.querySelector('#view-map .leaflet-container') || document.querySelector('#map'); return m ? m.getBoundingClientRect().width : 0; })()")
-        check(p.locator("#view-map").is_visible() and size > 300, f"관측소 지도도 제대로: {size}")
-        p.click(".page-btn[data-page=equip]"); p.wait_for_timeout(300); p.click(".page-btn[data-page=snow]"); p.wait_for_timeout(300)
-        check("active" in p.locator(".tab-btn[data-tab=map]").get_attribute("class"), "다시 와도 보던 탭 그대로")
-        # 뒤로가기: 처음 칸 = 장비 지원
-        p.go_back(); p.wait_for_timeout(300); p.go_back(); p.wait_for_timeout(300); p.go_back(); p.wait_for_timeout(300); p.go_back(); p.wait_for_timeout(400)
-        check(p.locator("#shell").get_attribute("data-page") == "equip", "뒤로가기 끝 = 첫 화면(장비 지원)")
-        # 요청·편성에서 예보로 넘어가면 강설량 측정의 그 지사(첫 화면이 장비 지원이어도)
-        br = J(p, f"{S}.state ? {S}.state.order[0] : null")
-        p.evaluate(f"SSOpenForecast('{br}')"); p.wait_for_timeout(800)
-        check(p.locator("#shell").get_attribute("data-page") == "snow" and J(p, f"{S}.focus") == br, "예보로 넘어가기")
-    finally:
-        T.FIRST["snow"] = True
-
-def t_first_page_equip_first_forecast(b):
-    """장비 지원에서 강설량 측정을 한 번도 안 열고 바로 예보로 넘어가도 그 지사가 열림. #fc= 로 연 창은 강설량 측정 그대로"""
-    T.FIRST["snow"] = False
-    try:
-        p, m = open_page(b); p.wait_for_timeout(1500)
-        br = p.evaluate("(window.JURIS.doc.branches[0] || {}).id"); p.evaluate(f"SSOpenForecast('{br}')"); p.wait_for_timeout(1000)
-        check(p.locator("#shell").get_attribute("data-page") == "snow" and J(p, f"{S}.focus") == br and J(p, f"{S}.map.getSize().x") > 300, f"바로 예보로: {J(p, S + '.focus')}")
-        q, m2 = open_page(b, hash=f"#fc={br}"); q.wait_for_timeout(1500)
-        check(q.locator("#shell").get_attribute("data-page") == "snow" and not q.locator("#equipFrame").get_attribute("src"), "#fc= 창은 강설량 측정, 장비 지원은 안 불러옴")
-    finally:
-        T.FIRST["snow"] = True
+    check(user.is_visible() and more.get_attribute("aria-expanded") == "true" and p.locator(".tn-tabs").bounding_box()["y"] > y0, "누르면 펴지고 탭을 아래로 밂")
+    more.click(); p.wait_for_timeout(100); check(not user.is_visible() and p.locator(".tn-tabs").bounding_box()["y"] == y0, "다시 누르면 접힘")
 
 def t_int_and_range(b):
     """2026-11-04(62): 적설·강수는 정수로, '1mm·1cm 미만' 시각이 있으면 범위(0~3, 한 시각이면 ~1). 고정 창 표의 그 시각 칸은 '~1'"""
@@ -488,7 +393,7 @@ def t_int_and_range(b):
     check(tds == ["~1"], f"고정 창: '~1' 칸 하나: {tds}")
     check(p.locator(".fc-pin .fc-tt-sum").count()==0, "불필요한 합계 설명 제거")
 
-TESTS += [t_int_and_range, t_blend_no_toggle, t_pin_move_resize, t_phone_fit, t_eq_round_bar, t_eq_round_no_edit, t_first_page_equip, t_first_page_equip_first_forecast]
+TESTS += [t_int_and_range, t_blend_no_toggle, t_pin_move_resize, t_phone_fit, t_phone_account_fold]
 
 def t_tail_separate(b):
     # 22시대 동적 자료에는 첫 칸23~24만 있고22~24가 없을 수 있다.

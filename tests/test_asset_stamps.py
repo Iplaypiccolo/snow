@@ -18,7 +18,7 @@ def t_stamps_up_to_date():
     assert r.returncode == 0, (r.stdout + r.stderr).strip()
 
 def t_every_local_asset_has_stamp():
-    for page in ['index.html', 'admin/index.html', 'equipment/index.html']:
+    for page in ['index.html', 'admin/index.html']:
         html = (ROOT / page).read_text(encoding='utf-8')
         bare = [m for m in re.findall(r'(?:<script src="|<link rel="stylesheet" href=")((?!https?:)[^"]+\.(?:js|css)[^"]*)"', html) if '?v=' not in m]
         assert not bare, f'{page}: 꼬리표 없는 파일 {bare}'

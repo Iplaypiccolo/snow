@@ -4,10 +4,9 @@
 
 왜: GitHub Pages 는 파일을 브라우저에 최대 10분 저장해 두게 합니다(Cache-Control: max-age=600). 그래서 새 화면 코드를 올려도
     한동안 예전 파일(또는 예전·새 파일이 섞인 상태)로 동작할 수 있습니다.
-하는 일: index.html · admin/index.html · equipment/index.html 의 이 사이트 js·css 주소 뒤에 `?v=<파일 내용 지문 8자리>` 를 붙입니다.
+하는 일: index.html · admin/index.html 의 이 사이트 js·css 주소 뒤에 `?v=<파일 내용 지문 8자리>` 를 붙입니다.
     파일 내용이 바뀔 때만 꼬리표가 바뀌므로, 바뀐 파일만 새로 받고 나머지는 캐시를 그대로 씁니다.
-    첫 화면 안에 띄우는 장비 지원 화면(iframe data-src="equipment/index.html")에도 꼬리표를 붙입니다(2026-10-05) —
-    안쪽 화면 주소가 늘 같으면 브라우저가 예전 장비 지원 화면을 계속 쓰고, Ctrl+F5 로도 안쪽 화면은 새로 받지 않을 수 있어서.
+    화면 안에 띄우는 iframe(data-src)에도 꼬리표를 붙입니다(2026-10-05 장비 지원 화면 때문에 넣음, 2026-11-21 그 화면은 없앰).
 
 사용(저장소 맨 위에서):
     python tools/stamp_assets.py          # 꼬리표 갱신 (js·css 를 고쳤으면 커밋 전에 실행)
@@ -17,7 +16,7 @@ import hashlib, re, sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-PAGES = ['equipment/index.html', 'admin/index.html', 'index.html']     # 장비 지원을 먼저(첫 화면이 그 꼬리표를 씀)
+PAGES = ['admin/index.html', 'index.html']
 PAT = re.compile(r'(<script src="|<link rel="stylesheet" href=")(?!https?:|//)([^"?]+\.(?:js|css))(?:\?v=[0-9a-f]*)?(")')
 FRAME = re.compile(r'(<iframe [^>]*data-src=")(?!https?:|//)([^"?]+\.html)(?:\?v=[0-9a-f]*)?(")')
 

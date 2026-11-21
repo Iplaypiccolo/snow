@@ -24,15 +24,12 @@ threading.Thread(target=server.serve_forever, daemon=True).start()
 URL = f"http://127.0.0.1:{PORT}/index.html"
 LDIR, XFILE = os.environ.get("LEAFLET_DIR"), os.environ.get("XLSX_FILE")
 
-FIRST = {"snow": True}
 HTML = str(Path(__file__).resolve().parent.parent / "index.html")
 def route(r):
     u = r.request.url
     if LDIR and "leaflet.min.js" in u: return r.fulfill(path=LDIR + "/leaflet.js", content_type="application/javascript")
     if LDIR and "leaflet.min.css" in u: return r.fulfill(path=LDIR + "/leaflet.css", content_type="text/css")
     if XFILE and "xlsx.full.min.js" in u: return r.fulfill(path=XFILE, content_type="application/javascript")
-    if FIRST["snow"] and u.split("?")[0].split("#")[0] == URL:      # 2026-11-03 첫 화면이 장비 지원으로 바뀜. 강설량 측정을 보는 시험들은 그대로 강설량 측정에서 시작(t_first_page_equip 만 실제 그대로)
-        return r.fulfill(body=io.open(HTML, encoding="utf-8").read().replace('data-first="equip"', 'data-first="snow"'), content_type="text/html; charset=utf-8")
     if u.startswith("http://127.0.0.1"): return r.continue_()
     if LDIR: return r.abort()          # 오프라인 모드: 지도 타일 등은 막음
     return r.continue_()

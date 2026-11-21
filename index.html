@@ -44,8 +44,8 @@
   @keyframes ssFade{from{opacity:0}}
   @keyframes ssPop{from{opacity:0;transform:scale(.97)}}
   @keyframes ssToast{from{opacity:0;transform:translate(-50%,10px)}}
-  .view,#page-equip{animation:ssFade .15s ease-out;}
-  .tab-btn,.eq-btn,.page-btn{transition:color .15s ease,background-color .15s ease,border-color .15s ease,box-shadow .15s ease;}
+  .view{animation:ssFade .15s ease-out;}
+  .tab-btn{transition:color .15s ease,background-color .15s ease,border-color .15s ease,box-shadow .15s ease;}
   @media (prefers-reduced-motion: reduce){*,*::before,*::after{animation:none !important;transition:none !important;}}
 
   /* ---- 바깥 틀: 위쪽 메뉴 + 아래 화면 ---- */
@@ -53,7 +53,7 @@
   .content{flex:1;min-width:0;display:flex;flex-direction:column;min-height:0;}
   .app{display:flex;flex-direction:column;flex:1;min-height:0;}
 
-  /* ---- 위쪽 메뉴(2026-10-10): 1줄 = 로고·페이지 전환·사용자, 2줄 = 지금 페이지의 메뉴 ---- */
+  /* ---- 위쪽 메뉴(2026-10-10): 1줄 = 로고·사용자, 2줄 = 메뉴(2026-11-21 장비 지원 페이지를 없애 페이지 전환도 없앰) ---- */
   .topnav{flex:none;background:var(--panel);box-shadow:0 1px 0 var(--line);position:relative;z-index:var(--z-nav);}
   .tn-row{display:flex;flex-wrap:wrap;align-items:center;gap:10px 20px;padding:10px 20px 6px;}
   .sn-brand{display:flex;align-items:center;gap:10px;min-width:0;}
@@ -62,80 +62,26 @@
   .sn-title{display:flex;flex-direction:column;line-height:1.25;}
   .sn-title b{font-size:15px;font-weight:700;letter-spacing:-.02em;}
   .sn-title small{font-size:11.5px;color:var(--muted);}
-  .tn-pages{display:flex;gap:3px;padding:3px;background:var(--ice);border-radius:11px;}
-  .page-btn{font-family:var(--sans);font-size:13.5px;font-weight:500;color:var(--muted);background:none;border:0;border-radius:8px;padding:7px 16px;cursor:pointer;}
-  .page-btn:hover{color:var(--ink);}
-  .page-btn.active{background:var(--panel);color:var(--accent);font-weight:700;box-shadow:0 1px 2px rgba(16,36,58,.14);}
   .tn-right{margin-left:auto;display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;}
   .tn-tabs{padding:0 12px;overflow-x:auto;scrollbar-width:thin;}
   .sn-group{display:flex;gap:2px;}
-  /* 장비 지원 새로고침(2026-11-02): 메뉴 줄 오른쪽 — 위쪽 메뉴는 늘 보이므로 스크롤해도 보임. 좁은 화면에서 메뉴가 옆으로 밀려도 오른쪽에 붙음 */
-  .eq-right{margin-left:auto;position:sticky;right:0;display:flex;align-items:center;gap:12px;padding:0 6px 0 12px;background:var(--panel);white-space:nowrap;box-shadow:12px 0 0 var(--panel),-8px 0 8px -4px var(--panel);}
-  .eq-reload{display:flex;align-items:center;gap:8px;}
-  /* 기준일자(2026-11-03 사용자 요청): 늘 보이게 위쪽 메뉴에. 넓은 화면 = 탭 줄 오른쪽(1500px 이상은 삭제·만들기도 그 자리), 그보다 좁으면 [+]로 줄을 펼침.
-     1240px 미만 = 사용법 아래 줄(탭을 가리지 않음, 탭은 아래로 밀림) */
-  .eq-round{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12.5px;}
-  .eq-round[hidden],.shell[data-page="snow"] .eq-round{display:none;}
-  .eq-round-lab{display:inline-flex;align-items:center;gap:6px;font-weight:700;color:var(--ink);white-space:nowrap;}
-  .eq-round-sel{font:inherit;font-size:13px;font-weight:700;color:#3a2f00;background:#fff3b0;border:1.5px solid #e0b400;border-radius:8px;padding:4px 6px;cursor:pointer;}
-  .eq-round-more{font:inherit;font-size:15px;font-weight:700;line-height:1;width:28px;height:28px;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:8px;cursor:pointer;}
-  .eq-round-tools{display:none;align-items:center;gap:6px;flex-wrap:wrap;}
-  .eq-round.open .eq-round-tools{display:inline-flex;}
-  .eq-round-tools label{display:inline-flex;align-items:center;gap:4px;white-space:nowrap;color:var(--muted);}
-  .eq-round-tools input{font:inherit;font-size:12.5px;border:1px solid var(--line);border-radius:7px;padding:3px 4px;background:var(--panel);color:var(--ink);}
-  .eq-round-tools button{font:inherit;font-size:12.5px;font-weight:600;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:8px;padding:4px 10px;cursor:pointer;white-space:nowrap;}
-  .eq-round-tools button[data-rd="del"]{color:#b0392b;border-color:#e3b5ae;}
-  #eqRoundRow{padding:2px 12px 6px;}
-  .eq-round-bar{display:flex;align-items:flex-start;}
-  .eq-round-bar .sn-reload{margin:2px 12px 6px auto;flex:none;}
-  /* 휴대폰(2026-11-03 사용자 요청: 위에 붙는 줄이 너무 많음): 화면·새로고침 뺀 계정 줄은 [▾]로 접고 폄, 페이지 전환 옆. 기준일자 줄과 새로고침은 늘 보임 */
+  /* 휴대폰(2026-11-03 사용자 요청: 위에 붙는 줄이 너무 많음): 계정 줄은 [▾]로 접고 폄 */
   .tn-more{display:none;font:inherit;font-size:14px;font-weight:700;line-height:1;width:32px;height:32px;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:8px;cursor:pointer;flex:none;}
-  #eqRoundWide{display:none;flex-wrap:nowrap;}
-  @media (min-width:1240px){
-    #eqRoundWide{display:flex;}
-    #eqRoundRow{display:none;justify-content:flex-end;}
-    #eqRoundRow.open{display:flex;}
-    #eqRoundRow .eq-round-lab,#eqRoundRow .eq-round-more{display:none;}
-    .shell[data-page="snow"] #eqRoundWide,.shell[data-page="snow"] #eqRoundRow{display:none;}
-    #eqRoundWide[hidden]{display:none;}
-  }
-  @media (min-width:1500px){
-    #eqRoundRow,#eqRoundRow.open{display:none;}
-    #eqRoundWide .eq-round-more{display:none;}
-    #eqRoundWide .eq-round-tools{display:inline-flex;flex-wrap:nowrap;}
-  }
-  .eq-reload small{font-size:11.5px;color:var(--muted);}
-  .eq-reload button{font:inherit;font-size:12.5px;font-weight:600;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:8px;padding:5px 12px;cursor:pointer;}
-  .eq-reload button:hover{border-color:var(--accent);color:var(--accent);}
-  .eq-reload button:disabled{opacity:.6;cursor:default;}
-  .shell[data-page="snow"] .sn-group[data-group="equip"],.shell[data-page="equip"] .sn-group[data-group="snow"]{display:none;}
-  .tab-btn,.eq-btn{display:flex;align-items:center;gap:7px;white-space:nowrap;font-family:var(--sans);font-size:13.5px;font-weight:500;
+  .tab-btn{display:flex;align-items:center;gap:7px;white-space:nowrap;font-family:var(--sans);font-size:13.5px;font-weight:500;
     color:var(--muted);background:none;border:0;border-bottom:2px solid transparent;padding:9px 10px 8px;cursor:pointer;}
-  .tab-btn:hover,.eq-btn:hover{color:var(--ink);}
+  .tab-btn:hover{color:var(--ink);}
   .sn-ic{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
-  .tab-btn[data-perm]::after,.eq-btn[data-perm]::after{content:"권한";font-size:10.5px;font-weight:600;padding:0 5px;border-radius:4px;background:var(--ice);color:#1f4a6b;}
-  .tab-btn.active,.eq-btn.active{color:var(--ink);font-weight:700;border-bottom-color:var(--accent);}
-  .eq-btn[hidden]{display:none;}
-  .sn-theme{display:flex;align-items:center;gap:4px;font-size:12px;color:var(--muted);}
-  .sn-theme[hidden]{display:none;}
-  .sn-theme span{margin-right:4px;}
-  .sn-theme button{font:inherit;font-size:12px;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:7px;padding:4px 10px;cursor:pointer;}
-  .sn-theme button[aria-pressed="true"]{background:var(--ice);border-color:var(--ice);color:var(--accent);font-weight:700;}
-  .sn-reload{display:none;font:inherit;font-size:12px;font-weight:600;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:7px;padding:4px 10px;cursor:pointer;white-space:nowrap;}
-  .sn-reload:disabled{opacity:.6;cursor:default;}
+  .tab-btn[data-perm]::after{content:"권한";font-size:10.5px;font-weight:600;padding:0 5px;border-radius:4px;background:var(--ice);color:#1f4a6b;}
+  .tab-btn.active{color:var(--ink);font-weight:700;border-bottom-color:var(--accent);}
   @media (max-width: 860px){
     .tn-more{display:inline-block;margin-left:auto;}
     .tn-right{display:none;width:100%;margin-left:0;}
     .tn-row.more-open .tn-right{display:flex;}
     .tn-row{flex-wrap:wrap;}
-    .shell[data-page="equip"] .sn-reload{display:inline-block;}   /* 휴대폰 장비 지원: [새로고침]은 탭 위 머리글에(2026-11-02 — 탭 줄에 있으면 탭을 가림) */
-    .eq-reload{display:none;}
     .tn-row{padding:8px 12px 4px;gap:8px 12px;}
     .sn-title small{display:none;}
     .tn-tabs{padding:0 4px;}
   }
-  #page-equip{display:none; flex:1; min-height:0;}
-  #page-equip iframe{width:100%; height:100%; border:0; display:block; background:var(--paper);}
 
 
   .statbar{
@@ -430,24 +376,16 @@
   <link rel="stylesheet" href="guide/guide.css?v=9b208f3b">
 </head>
 <body>
-<div class="shell" id="shell" data-page="snow" data-first="equip">
+<div class="shell" id="shell" data-page="snow">
 <a class="skip-link" href="#content">본문 바로가기</a>
 <header class="topnav" id="topNav">
   <div class="tn-row">
     <div class="sn-brand"><span class="sn-mark"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v20M3.3 7l17.4 10M3.3 17L20.7 7M9.5 3.5L12 6l2.5-2.5M9.5 20.5L12 18l2.5 2.5M3.6 10.4l3.3-.9-.9-3.3M20.4 13.6l-3.3.9.9 3.3M3.6 13.6l3.3.9-.9 3.3M20.4 10.4l-3.3-.9.9-3.3"/></svg></span><span class="sn-title"><b>제설 지원</b><small>고속도로 강설·장비</small></span></div>
-    <nav class="tn-pages" aria-label="페이지 전환">
-      <button type="button" class="page-btn" data-page="equip">장비 지원</button>
-      <button type="button" class="page-btn active" data-page="snow">강설량 측정</button>
-    </nav>
-    <button type="button" class="tn-more" id="tnMore" aria-expanded="false" aria-controls="tnRight" aria-label="화면·계정 메뉴 펴기">▾</button>
+    <button type="button" class="tn-more" id="tnMore" aria-expanded="false" aria-controls="tnRight" aria-label="계정 메뉴 펴기">▾</button>
     <div class="tn-right" id="tnRight">
-      <div class="sn-theme" id="snTheme" role="group" aria-label="장비 지원 화면 밝기" hidden>
-      <span>화면</span><button type="button" data-eqtheme="light" aria-pressed="true">밝게</button><button type="button" data-eqtheme="dark" aria-pressed="false">어둡게</button>
-    </div>
       <div class="ss-user" id="ssUser" hidden></div>
     </div>
   </div>
-  <div class="eq-round-bar"><div class="eq-round" id="eqRoundRow" hidden></div><button type="button" class="sn-reload" id="snReload">새로고침</button></div>
   <div class="tn-tabs">
     <nav class="sn-group" data-group="snow" aria-label="강설량 측정 메뉴">
       <button type="button" class="tab-btn active" data-tab="forecast"><svg class="sn-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 15a4 4 0 1 1 .9-7.9A5 5 0 0 1 17.5 9 3.5 3.5 0 0 1 17 16H7z M8 19h.01 M12 20h.01 M16 19h.01"/></svg><span>기관별 예보</span></button>
@@ -457,23 +395,10 @@
       <button type="button" class="tab-btn" data-tab="sources"><svg class="sn-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l5 5v13H7z M14 3v5h5 M10 13h6 M10 17h6"/></svg><span>데이터 출처</span></button>
       <button type="button" class="tab-btn" data-tab="grid" id="tabGridBtn" data-perm style="display:none"><svg class="sn-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v16H4z M4 10h16 M4 15h16 M10 4v16 M15 4v16"/></svg><span>예보 격자 편입</span></button>
     </nav>
-    <nav class="sn-group" data-group="equip" aria-label="장비 지원 메뉴">
-      <button type="button" class="eq-btn" data-eqtab="move"><svg class="sn-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h11v9H3z M14 10h4l3 3v3h-7 M7 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4z M17 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"/></svg><span>장비 지원현황</span></button>
-      <button type="button" class="eq-btn" data-eqtab="branch"><svg class="sn-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4h6v3H9z M7 5H5v16h14V5h-2 M9 14l2 2 4-4"/></svg><span>지사별 요청·편성</span></button>
-      <button type="button" class="eq-btn" data-eqtab="fleet"><svg class="sn-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h13 M8 12h13 M8 18h13 M3 6h.01 M3 12h.01 M3 18h.01"/></svg><span>기관별 장비</span></button>
-      <button type="button" class="eq-btn" data-eqtab="alloc"><svg class="sn-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4z M4 10h16 M10 5v14 M15 5v14"/></svg><span>기관별 배치</span></button>
-      <button type="button" class="eq-btn" data-eqtab="gwteam" id="eqTeamBtn" data-perm hidden><svg class="sn-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 4v5c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V7z M9 12l2 2 4-4"/></svg><span>강원본부 지원장비</span></button>
-      <button type="button" class="eq-btn" data-eqtab="log" id="eqLogBtn" data-perm hidden><svg class="sn-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z M12 7v5l3 2"/></svg><span>로그 기록</span></button>
-      <span class="eq-right"><span class="eq-round" id="eqRoundWide" hidden></span><span class="eq-reload"><small id="eqReloadAt"></small><button type="button" id="eqReload" title="다른 아이디가 넣은 자료를 다시 읽음(화면을 새로 열지 않음)">새로고침</button></span></span>
-    </nav>
   </div>
 </header>
 <main class="content" id="content" tabindex="-1">
 <noscript><div style="padding:40px;font-family:sans-serif;">이 화면은 JavaScript 가 켜져 있어야 로그인할 수 있습니다.</div></noscript>
-
-<div id="page-equip">
-  <iframe id="equipFrame" title="제설장비 지원 현황" data-src="equipment/index.html?v=8cbe85d5"></iframe>
-</div>
 
 <div class="app" id="page-snow">
 
@@ -593,8 +518,8 @@
 <script src="auth/events.js?v=0c959479" defer></script>
 <script src="auth/gate.js?v=309218bc" defer></script>
 <script src="auth/snow.js?v=21f5a422" defer></script>
-<script src="guide/guide.js?v=5e10d17f" defer></script>
-<script src="boot.js?v=be138221" defer></script>
+<script src="guide/guide.js?v=c20ec341" defer></script>
+<script src="boot.js?v=47284cb9" defer></script>
 <script src="login/intro-loader.js?v=2c2f6b9d" defer></script>
 </body>
 </html>
