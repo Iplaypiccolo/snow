@@ -340,6 +340,20 @@ class Mock:
                 (self.fc_series_calls if ser else self.fc_calls).append(sorted(ids))
                 return send(200, {"tmfc": self.fc_issued, "start_at": self.fc_start, "end_at": self.fc_end,
                                   "cells": [[nx, ny, [b for b in bs if b in ids], s, p, t, ta, sr if ser else None, pop, ph, sh, 60 + (nx + ny) % 41] for nx, ny, bs, s, p, t, ta, sr, pop, ph, sh in self.fc_cells if ids & set(bs)]})      # 마지막 = 24시간 최고 습도(90)
+            if tbl == "forecast_range" and "/rpc/" in path:                                 # 110: 기간 합(시험: 시간 수 / 24 배로 키움)
+                if not self.usable(u): return send(401, {"message": "login"})
+                import datetime as dt
+                st0 = dt.datetime.fromisoformat(self.fc_start.replace("Z", "+00:00")); last = st0 + dt.timedelta(hours=61)
+                b = body or {}; f0 = dt.datetime.fromisoformat(b["p_from"].replace("Z", "+00:00")) if b.get("p_from") else st0
+                t0 = dt.datetime.fromisoformat(b["p_to"].replace("Z", "+00:00")) if b.get("p_to") else last
+                f0 = max(f0, st0); t0 = min(t0, last); k = (int((t0 - f0).total_seconds() // 3600) + 1) / 24
+                self.range_calls = getattr(self, "range_calls", []) + [b]
+                sc = lambda v: None if v is None else round(v * k, 1)
+                bf = [dict(branch_id=o["branch_id"], max_snow_24h=sc(o["max_snow_24h"]), max_snow_hi=sc(o.get("max_snow_hi")), max_pcp_24h=sc(o["max_pcp_24h"]), max_pcp_hi=sc(o.get("max_pcp_hi")),
+                           max_pop_24h=o["max_pop_24h"], min_tmp=o["min_tmp"] - 1, min_tmp_at=o["min_tmp_at"]) for o in self.branch_forecast]
+                ids = set(b.get("p_branches") or [])
+                cells = [[nx, ny, [x for x in bs if x in ids], sc(s), sc(p), t - 1, ta, None, pop, sc(ph), sc(sh), None] for nx, ny, bs, s, p, t, ta, sr, pop, ph, sh in self.fc_cells if ids & set(bs)] if ids else None
+                return send(200, {"status": "ok", "from": f0.isoformat(), "to": t0.isoformat(), "start_at": self.fc_start, "last_at": last.isoformat(), "tmfc": self.fc_issued, "bf": bf, "cells": cells})
             if tbl == "zone_request_list" and "/rpc/" in path:      # 특보구역 요청(마이그레이션 92): 관리자 = 대기 요청 전체, 그 밖 = 자기 것(시험에선 없음)
                 if not self.usable(u): return send(401, {"message": "login"})
                 return send(200, [dict(q, mine=False) for q in self.zone_reqs] if u["profile"].get("role") == "admin" else [])

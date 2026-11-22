@@ -826,6 +826,31 @@ def t_point_snow_decimal(b):
 
 TESTS += [t_point_snow_decimal]
 
+def t_range_buttons(b):
+    """2026-11-22(마이그레이션 110): [24시간] [48시간] [최대] [기간 지정] — 목록·지도 값과 제목이 그 기간으로. 24시간은 서버 계산 값 그대로(기간 조회 안 함)"""
+    p, m = open_page(b); p.click(".tab-btn[data-tab=forecast]"); p.wait_for_timeout(800)
+    d = bid(p, "대관령"); bf = [x for x in m.branch_forecast if x["branch_id"] == d][0]
+    check(p.locator("[data-fcr='24']").get_attribute("aria-pressed") == "true" and "(24시간 합·최저)" in p.locator("#fc-meta").inner_text() and not getattr(m, "range_calls", []), "처음 = 24시간, 기간 조회 안 함")
+    p.click("[data-fcr='48']"); p.wait_for_timeout(700)
+    check("(48시간 합·최저)" in p.locator("#fc-meta").inner_text(), "48시간 제목: " + p.locator("#fc-meta").inner_text())
+    p.click("#fc-tree [data-fchq='강원']"); p.wait_for_timeout(800)
+    row = p.locator(f"#fc-tree [data-fcbr='{d}'] .fc-v.t").inner_text()
+    check(float(row.replace("℃", "")) == bf["min_tmp"] - 1 and any(c.get("p_branches") for c in m.range_calls), f"지사 줄·본부 격자를 기간 값으로: {row} / {m.range_calls[-1:]}")
+    p.click("[data-fcr='max']"); p.wait_for_timeout(700)
+    t = p.locator("#fc-meta").inner_text()
+    check("(62시간 합·최저)" in t and "1시간 양" in t and m.range_calls[-2].get("p_to") is None, "최대 = 서버가 정한 끝까지, 끝 알림: " + t)
+    p.click("[data-fcr='custom']"); p.wait_for_timeout(300)
+    fi, ti = p.locator("[data-fcr-from]"), p.locator("[data-fcr-to]")
+    check(fi.is_visible() and ti.is_visible() and fi.get_attribute("step") == "3600", "기간 지정: 날짜·시각 칸")
+    v0 = fi.input_value(); import datetime as dt
+    a = dt.datetime.fromisoformat(v0); fi.fill((a + dt.timedelta(hours=6)).strftime("%Y-%m-%dT%H:00")); ti.fill((a + dt.timedelta(hours=18)).strftime("%Y-%m-%dT%H:00"))
+    p.click("[data-fcr-apply]"); p.wait_for_timeout(700)
+    check("(12시간 합·최저)" in p.locator("#fc-meta").inner_text(), "고른 12시간: " + p.locator("#fc-meta").inner_text())
+    p.click("[data-fcr='24']"); p.wait_for_timeout(300)
+    check("(24시간 합·최저)" in p.locator("#fc-meta").inner_text() and float(p.locator(f"#fc-tree [data-fcbr='{d}'] .fc-v.t").inner_text().replace("℃", "")) == bf["min_tmp"], "24시간으로 돌아오면 원래 값")
+
+TESTS += [t_range_buttons]
+
 def t_value_colors(b):
     """2026-11-15 사용자: 3시간 표 신적설·강수강도의 옅은 파란 바탕 없앰, 1시간·3시간 표 칸 색이 값에 따라 바뀜(신적설·강수·강수확률·기온·습도). 0·없음은 색 없음.
     2026-11-16 사용자: 강수·강수강도·강수확률·습도도 파랑, 진하면 흰 글자. 기온 -5 이하·0 미만·0~4(색 없음)·4~10·10 이상, 습도 20 미만(건조)·20마다(20~40 색 없음)"""

@@ -13,6 +13,9 @@
      → 서버가 그 지사 격자를 받고(몇 초), 30초·100초 뒤 다시 확인해 바뀌었으면 지도·표를 새로 받음. 받기 전·실패 때는 격자 값(정수·'~1')
      서버가 섞어 저장하므로 지사별 요청·편성·확정 값과 같음. 고정 창 표에서 초단기 시각은 색칠(series.vn). 전환 버튼·'발표 기준' 문구는 없앰
    - 격자를 누르면 뜨는 창(컴퓨터 화면만): 제목 줄을 끌어 옮기고, 아래쪽 모서리를 끌어 크기를 바꿈(글자도 같은 비율). 다른 격자를 눌러도 그대로이고 이 브라우저에 기억
+   - 기간(2026-11-22 사용자, 마이그레이션 110): 옆 목록 위 [24시간] [48시간] [최대] [기간 지정(날짜·시각)]. 24시간 = 서버가 매시 계산해 둔 값 그대로,
+     나머지 = forecast_range(시작, 끝[, 본부 지사들]) — 지사별 값(목록)과 본부 지사들의 격자별 값(지도·지사 격자 표). 최대 = 기상청이 1시간 양(cm·mm)으로 주는 끝
+     (보통 2.5~3일 뒤)까지. 끝을 넘으면 서버가 잘라 실제 기간을 돌려줌 → 그 기간을 제목에 보이고 잘렸으면 알림. 1시간·3시간 표·일별 창은 기간과 상관없이 그대로
    - 서버 읽기: branch_forecast(지사 59줄) 한 번 + 본부를 열 때 forecast_grid(그 본부 지사들의 격자, 수 KB) + 지사를 열 때 그 지사 추이(약 10KB)
    - 격자 창(2026-11-09, 마이그레이션 83): 격자 자료(forecast_cell_detail, 약 11KB)는 처음 한 번 받아 격자별로 기억하고, 열려 있는 동안
      10분(받는 중이면 3분)마다 forecast_version(약 0.1KB)으로 바뀌었는지만 확인 → 바뀐 때만 다시 받음. 확인이 실패하면 예전처럼 다시 받음
@@ -20,7 +23,7 @@
 (function () {
   'use strict';
   var G = window.GridCore, JC = window.JurisCore;
-  var S = { tailCache: {}, inited: false, map: null, lines: null, cells: null, hq: 'ALL', focus: null, state: null, bf: {}, grid: {}, series: {}, pin: null, pinAt: 0, names: null, meta: null, loading: false, pendingFocus: null, pinGeo: null };
+  var S = { rng: null, tailCache: {}, inited: false, map: null, lines: null, cells: null, hq: 'ALL', focus: null, state: null, bf: {}, grid: {}, series: {}, pin: null, pinAt: 0, names: null, meta: null, loading: false, pendingFocus: null, pinGeo: null };
 
   function $(id) { return document.getElementById(id); }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
@@ -49,7 +52,7 @@
   function saveShow() { try { localStorage.setItem(SHOW_KEY, JSON.stringify(S.show)); } catch (e) {} }
   // 지금 축척에서 격자 한 칸의 화면 크기(px) → 칸에 들어가는 줄 수(0 = 글자 없이 색만)
   function cellPx() {
-    var g = S.grid[S.hq]; if (!S.map || !g || !g.cells || !g.cells.length) return 0;
+    var g = curGrid(S.hq) || S.grid[S.hq]; if (!S.map || !g || !g.cells || !g.cells.length) return 0;
     var k = G.cellCorners(g.cells[0][0], g.cells[0][1]), a = S.map.latLngToLayerPoint(L.latLng(k[0])), b = S.map.latLngToLayerPoint(L.latLng(k[2]));
     return Math.min(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
   }
@@ -67,7 +70,53 @@
     return fetch('data/grid_names.json', { cache: 'no-cache' }).then(function (r) { return r.ok ? r.json() : {}; }).catch(function () { return {}; })
       .then(function (m) { S.names = m || {}; return S.names; });
   }
-  function bval(id) { var f = S.bf[id]; if (!f || Date.now() - Date.parse(f.issued_at) > STALE) return null; return f; }
+  function bval(id) {
+    var f = S.bf[id]; if (!f || Date.now() - Date.parse(f.issued_at) > STALE) return null;
+    if (!rngOn()) return f;
+    var r = S.rng.bf && S.rng.bf[id]; if (!r) return null;                  // 기간 값을 받는 중
+    var o = {}; for (var k in f) o[k] = f[k]; for (var k2 in r) o[k2] = r[k2]; return o;
+  }
+  /* ---------- 기간(마이그레이션 110) ---------- */
+  var H = 3600e3;
+  function rngOn() { return !!(S.rng && S.rng.mode !== '24'); }
+  function curGrid(hq) { return rngOn() ? S.rng.grid[hq] : S.grid[hq]; }
+  function isoH(ms) { return new Date(ms).toISOString(); }
+  function localInput(ms) { var d = new Date(ms); return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()) + 'T' + p2(d.getHours()) + ':00'; }
+  function rngHours() { return rngOn() && S.rng.from != null && S.rng.to != null ? Math.round((S.rng.to - S.rng.from) / H) + 1 : 24; }
+  function rngName() { return rngHours() + '시간'; }
+  // 시작 시각(24시간 창 첫 시각)과 고른 방식으로 요청할 [첫 시각, 마지막 시각](마지막은 포함, 비우면 서버가 끝으로)
+  function rngAsk(mode, from, to) {
+    var st = S.meta && S.meta.start ? Date.parse(S.meta.start) : null; if (st == null) return null;
+    if (mode === '48') return [st, st + 47 * H];
+    if (mode === 'max') return [st, null];
+    return [from, to];
+  }
+  function setRange(mode, from, to) {
+    if (mode === '24') { S.rng = null; render(); return; }
+    var ask = rngAsk(mode, from, to); if (!ask) return;
+    var r = S.rng = { mode: mode, from: ask[0], to: ask[1], ask: ask, bf: null, grid: {}, err: false, lastAt: S.rng && S.rng.lastAt || null,
+      pickFrom: S.rng && S.rng.pickFrom, pickTo: S.rng && S.rng.pickTo };
+    render();
+    SSAuth.authed('/rest/v1/rpc/forecast_range', { method: 'POST', body: { p_from: isoH(ask[0]), p_to: ask[1] == null ? null : isoH(ask[1]) } }).then(function (x) {
+      if (S.rng !== r) return;
+      if (!x || !x.ok || !x.json || x.json.status !== 'ok') { r.err = true; render(); return; }
+      r.bf = {}; (x.json.bf || []).forEach(function (b) { r.bf[b.branch_id] = b; });
+      r.from = Date.parse(x.json.from); r.to = Date.parse(x.json.to); r.lastAt = Date.parse(x.json.last_at); r.tmfc = x.json.tmfc;
+      r.cut = ask[1] == null ? false : r.to < ask[1];
+      if (r.pickFrom == null) { r.pickFrom = r.from; r.pickTo = r.to + H; }
+      render();
+      if (S.hq !== 'ALL') loadRangeGrid(S.hq).then(function () { if (S.rng === r) { render(); } });
+    }).catch(function () { if (S.rng === r) { r.err = true; render(); } });
+  }
+  function loadRangeGrid(hq) {
+    var r = S.rng; if (!rngOn() || !r.bf || r.grid[hq] || hq === 'ALL') return Promise.resolve();
+    var ids = st().order.filter(function (id) { return st().branches[id].hq === hq && !JC.isPrivate(hq); });
+    if (!ids.length) return Promise.resolve();
+    return SSAuth.authed('/rest/v1/rpc/forecast_range', { method: 'POST', body: { p_from: isoH(r.from), p_to: isoH(r.to), p_branches: ids } }).then(function (x) {
+      if (S.rng !== r || !x || !x.ok || !x.json || x.json.status !== 'ok') return;
+      r.grid[hq] = { tmfc: x.json.tmfc, start_at: x.json.from, end_at: isoH(Date.parse(x.json.to) + H), cells: x.json.cells || [] };
+    }).catch(function () {});
+  }
 
   /* ---------- 뼈대 ---------- */
   // 2026-11-09 사용자: 왼쪽 기관별 예보 목록을 접었다 폈다(이 브라우저에서 기억)
@@ -104,6 +153,7 @@
     }).catch(function () {});
   }
   function loadGrid(hq, fresh) {
+    if (rngOn()) loadRangeGrid(hq).then(function () { if (S.hq === hq) render(); });
     if (S.grid[hq] && !fresh) return Promise.resolve(S.grid[hq]);
     var ids = st().order.filter(function (id) { return st().branches[id].hq === hq && !JC.isPrivate(hq); });
     if (!ids.length) return Promise.resolve(null);
@@ -422,7 +472,7 @@
     var start=S.series[S.focus]._start;
     if(S.tailData && S.tailData.status==='ok') { var hourly=window.ForecastSeries.hourlyAll(S.tailData);sr=hourly.series; start=hourly.start_at; }
     renderTail();
-    var k = S.pin.split(','), g = S.grid[S.hq], c = g && g.cells ? g.cells.filter(function (x) { return x[0] === +k[0] && x[1] === +k[1]; })[0] : null;
+    var k = S.pin.split(','), g = curGrid(S.hq) || S.grid[S.hq], c = g && g.cells ? g.cells.filter(function (x) { return x[0] === +k[0] && x[1] === +k[1]; })[0] : null;
     box.innerHTML = '<button type="button" class="fc-reset" aria-label="처음 크기·위치로">원래대로</button><button type="button" class="fc-x fc-pin-x" aria-label="1시간 예보 닫기">×</button><div class="fc-pin-in">' + trendBox(sr, start, true) +
       '</div>' +
       '<span class="fc-pin-edge l" data-edge="l" aria-hidden="true"></span><span class="fc-pin-edge r" data-edge="r" aria-hidden="true"></span><span class="fc-pin-grip l" data-grip="l" aria-hidden="true"></span><span class="fc-pin-grip r" data-grip="r" aria-hidden="true"></span>';
@@ -473,7 +523,7 @@
   function drawCells() {
     S.cells.clearLayers();
     if (S.hq === 'ALL') return;
-    var g = S.grid[S.hq]; if (!g || !g.cells) return;
+    var g = curGrid(S.hq); if (!g || !g.cells) return;
     var fresh = g.tmfc && Date.now() - Date.parse(g.tmfc) <= STALE, fit = fitLines(cellPx());
     g.cells.forEach(function (c) {
       var nx = c[0], ny = c[1], bs = c[2] || [], snow = fresh ? c[3] : null, pcp = fresh ? c[4] : null, tmin = fresh ? c[5] : null, tat = fresh ? c[6] : null, pop = fresh && c[8] != null ? c[8] : null, phi = fresh ? c[9] : null, shi = fresh ? c[10] : null, reh = fresh && c[11] != null ? c[11] : null;      // phi·shi = 범위 위쪽(62), reh = 24시간 최고 습도(90)
@@ -484,7 +534,7 @@
       var poly = L.polygon(G.cellCorners(nx, ny), { weight: pinned ? 4 : S.focus ? 1.5 : 1, color: pinned ? '#FFC400' : S.focus ? '#33424f' : col, fillColor: col, fillOpacity: S.focus ? 0.7 : 0.28, opacity: 0.9 });
       var sr = S.focus && fresh && S.series[S.focus] ? S.series[S.focus][key] : null;
       poly.bindTooltip('<b>' + esc(cellName(nx, ny)) + '</b>' + cellNo(nx, ny) + '<br>' + bs.map(function (b) { return esc(bname(b)); }).join(', ') +
-        (S.focus ? '<br>24시간 적설 <b>' + rng(snow, shi) + 'cm</b> · 강수 <b>' + rng(pcp, phi) + 'mm</b>' + (pop != null ? ' · 확률 최고 <b>' + pct(pop) + '%</b>' : '') + '<br>최저기온 <b>' + tmp(tmin) + '℃</b> (' + esc(hh(tat)) + ')' +
+        (S.focus ? '<br>' + rngName() + ' 적설 <b>' + rng(snow, shi) + 'cm</b> · 강수 <b>' + rng(pcp, phi) + 'mm</b>' + (pop != null ? ' · 확률 최고 <b>' + pct(pop) + '%</b>' : '') + '<br>최저기온 <b>' + tmp(tmin) + '℃</b> (' + esc(hh(tat)) + ')' +
           (sr ? trendBox(sr, S.series[S.focus]._start, false) : '') : ''),
         { sticky: true, opacity: 1, className: 'gr-tip' + (sr ? ' fc-tip' : '') });
       poly.on('click', function () {
@@ -535,9 +585,24 @@
 
   /* ---------- 옆 목록 ---------- */
   function renderMeta() {
-    var m = S.meta, fresh = m && Date.now() - Date.parse(m.tmfc) <= STALE;
-    $('fc-meta').innerHTML = m ? (m.start ? '<b>' + esc(fmtHour(m.start)) + ' ~ ' + esc(fmtHour(m.end)) + '</b> (24시간 합·최저)' : '') +
-        (fresh ? '' : '<div class="fc-stale">예보 없음(12시간 넘게 새 예보를 받지 못함)</div>')
+    var m = S.meta, fresh = m && Date.now() - Date.parse(m.tmfc) <= STALE, r = S.rng, mode = r ? r.mode : '24';
+    var btn = function (k, t) { return '<button type="button" data-fcr="' + k + '" aria-pressed="' + (mode === k) + '">' + t + '</button>'; };
+    var bar = m && m.start ? '<div class="fc-range" role="group" aria-label="합·최저를 볼 기간">' + btn('24', '24시간') + btn('48', '48시간') + btn('max', '최대') + btn('custom', '기간 지정') + '</div>' : '';
+    if (mode === 'custom' && m && m.start) {
+      var lo = Date.parse(m.start), hi = (r.lastAt || lo + 23 * H) + H;
+      bar += '<div class="fc-range-pick"><label>시작 <input type="datetime-local" step="3600" data-fcr-from value="' + localInput(r.pickFrom != null ? r.pickFrom : lo) + '" min="' + localInput(lo) + '" max="' + localInput(hi - H) + '"></label>' +
+        '<label>끝 <input type="datetime-local" step="3600" data-fcr-to value="' + localInput(r.pickTo != null ? r.pickTo : Math.min(lo + 24 * H, hi)) + '" min="' + localInput(lo + H) + '" max="' + localInput(hi) + '"></label>' +
+        '<button type="button" data-fcr-apply>보기</button></div>';
+    }
+    var title = '';
+    if (m && m.start) {
+      if (!rngOn()) title = '<b>' + esc(fmtHour(m.start)) + ' ~ ' + esc(fmtHour(m.end)) + '</b> (24시간 합·최저)';
+      else if (r.err) title = '<span class="fc-stale">기간 값을 불러오지 못했습니다. 다시 눌러 보세요.</span>';
+      else if (!r.bf) title = '<span class="muted">기간 값을 불러오는 중…</span>';
+      else title = '<b>' + esc(fmtHour(isoH(r.from))) + ' ~ ' + esc(fmtHour(isoH(r.to + H))) + '</b> (' + rngName() + ' 합·최저)' +
+        (r.cut || mode === 'max' ? '<div class="fc-range-note">기상청이 1시간 양(cm·mm)으로 주는 끝: ' + esc(fmtHour(isoH(r.lastAt + H))) + '</div>' : '');
+    }
+    $('fc-meta').innerHTML = m ? bar + title + (fresh ? '' : '<div class="fc-stale">예보 없음(12시간 넘게 새 예보를 받지 못함)</div>')
       : '<span class="fc-stale">예보 없음</span>';
   }
   // 2026-11-22 사용자 "제목이 칸과 맞지 않아 보임": 값 네 칸을 한 묶음(fc-vals, 제목 줄과 같은 칸 너비)으로 — 가운데 정렬·세로 구분선은 style.css
@@ -570,7 +635,7 @@
     $('fc-tree').innerHTML = html; markSel();
   }
   function detailHtml(id) {
-    var g = S.grid[S.hq]; if (!g || !g.cells) return '<div class="fc-detail muted">격자를 불러오는 중…</div>';
+    var g = curGrid(S.hq); if (!g || !g.cells) return '<div class="fc-detail muted">격자를 불러오는 중…</div>';
     var fresh = g.tmfc && Date.now() - Date.parse(g.tmfc) <= STALE;
     var rows = g.cells.filter(function (c) { return (c[2] || []).indexOf(id) >= 0; })
       .map(function (c) { return { nx: c[0], ny: c[1], s: fresh ? c[3] : null, p: fresh ? c[4] : null, t: fresh ? c[5] : null, ta: fresh ? c[6] : null, o: fresh && c[8] != null ? c[8] : null, ph: fresh ? c[9] : null, sh: fresh ? c[10] : null }; })
@@ -580,7 +645,7 @@
       '</tbody></table></div>';
   }
   function renderLegend() {             // 범례(2026-10-10 간단히): 칸 숫자 순서 + 적설량 색띠만
-    $('fc-legend').innerHTML = S.focus ? '<span class="fc-legend-t">24시간</span><span class="fc-show" role="group" aria-label="지도 칸에 보일 값(24시간)">' + SHOW_ITEMS.map(function (x) {
+    $('fc-legend').innerHTML = S.focus ? '<span class="fc-legend-t">' + rngName() + '</span><span class="fc-show" role="group" aria-label="지도 칸에 보일 값(' + rngName() + ')">' + SHOW_ITEMS.map(function (x) {
           return '<label class="fc-chk ' + x[0] + '"><input type="checkbox" data-fcshow="' + x[0] + '"' + (S.show[x[0]] ? ' checked' : '') + '><span>' + x[1] + '</span></label>'; }).join('') + '</span>' +
         '<span class="fc-ramp"><span class="fc-ramp-t">적설량</span><ol>' + SCALE.slice().reverse().map(function (x) { return '<li><i style="background:' + x[1] + '"></i>' + esc(x[2]) + '</li>'; }).join('') + '</ol></span>'
       : '';
@@ -641,6 +706,18 @@
     });
     $('view-forecast').addEventListener('click', function (e) {
       var t = e.target, h = t.closest && t.closest('[data-fchq]'); if (h) { setHq(S.hq === h.dataset.fchq ? 'ALL' : h.dataset.fchq); return; }
+      var rb0 = t.closest && t.closest('[data-fcr]'); if (rb0) {                      // 110: 기간 단추
+        var md = rb0.dataset.fcr;
+        if (md === 'custom') { var pr = S.rng; S.rng = { mode: 'custom', from: pr && pr.from, to: pr && pr.to, bf: null, grid: {}, lastAt: pr && pr.lastAt, pickFrom: pr && pr.pickFrom, pickTo: pr && pr.pickTo, idle: true };
+          if (S.rng.lastAt == null) { setRange('max'); S.rng.mode = 'custom'; } else { S.rng.bf = pr && pr.mode !== '24' ? pr.bf : null; S.rng.grid = pr && pr.mode !== '24' ? pr.grid : {}; } render(); return; }
+        setRange(md); return; }
+      if (t.closest && t.closest('[data-fcr-apply]')) {
+        var fi = $('view-forecast').querySelector('[data-fcr-from]'), ti = $('view-forecast').querySelector('[data-fcr-to]');
+        var f0 = fi && fi.value ? new Date(fi.value).getTime() : NaN, t0 = ti && ti.value ? new Date(ti.value).getTime() : NaN;
+        if (!(f0 < t0)) { alert('끝은 시작보다 뒤여야 합니다.'); return; }
+        f0 = Math.floor(f0 / H) * H; t0 = Math.floor(t0 / H) * H;
+        var keep = S.rng; setRange('custom', f0, t0 - H); if (S.rng) { S.rng.pickFrom = f0; S.rng.pickTo = t0; S.rng.lastAt = keep && keep.lastAt; }
+        return; }
       if (t.closest && t.closest('.fc-side-tog')) { toggleSide(); return; }
       var rb = t.closest && t.closest('.fc-reset'); if (rb) { resetBox(rb.closest('.fc-pin,.fc-tail,.fc-daily')); return; }
       var b = t.closest && t.closest('[data-fcbr]'); if (b) { focusBranch(b.dataset.fcbr); return; }
@@ -664,6 +741,7 @@
     Promise.all([loadOverview(), loadNames()]).then(function () {
       var id = S.pendingFocus; S.pendingFocus = null;
       if (id && st().branches[id]) { S.hq = 'ALL'; S.focus = null; focusBranch(id); } else { render(); fitTo(); }
+      if (rngOn()) { var r0 = S.rng; setRange(r0.mode, r0.ask && r0.ask[0], r0.ask && r0.ask[1]); }      // 110: 예보가 바뀌었을 수 있어 기간 값 다시
     });
     render();
   }
