@@ -8,9 +8,10 @@
 /* 2026-11-22 사용자: 제목(적설·강수·확률·최저)과 값이 같은 칸에 — 네 칸을 한 묶음(.fc-vals)으로 같은 너비, 가운데 정렬, 칸마다 세로 구분선. 오른쪽 여백도 줄마다 같게 */
 .fc-cols{display:flex;align-items:stretch;gap:8px;padding:4px 14px;font-size:11px;color:var(--muted);font-weight:700;}
 .fc-cols .fc-lab{flex:1;min-width:0;}
-.fc-vals{display:grid;grid-template-columns:56px 56px 42px 50px;flex:none;align-self:stretch;}
-.fc-vals > span{display:flex;align-items:center;justify-content:center;text-align:center;border-left:1px solid #d9e3ea;white-space:nowrap;}
-.fc-vals > span:last-child{border-right:1px solid #d9e3ea;}
+.fc-vals{display:grid;grid-template-columns:56px 56px 42px 50px;flex:none;align-self:stretch;align-items:center;
+  --fl:#d9e3ea;background:linear-gradient(var(--fl),var(--fl)) 0 0/1px 100% no-repeat,linear-gradient(var(--fl),var(--fl)) 56px 0/1px 100% no-repeat,
+  linear-gradient(var(--fl),var(--fl)) 112px 0/1px 100% no-repeat,linear-gradient(var(--fl),var(--fl)) 154px 0/1px 100% no-repeat,linear-gradient(var(--fl),var(--fl)) 203px 0/1px 100% no-repeat;}
+.fc-vals > span{display:block;text-align:center;white-space:nowrap;}      /* 칸 안은 보통 글자(숫자·단위가 한 글로 읽히게). 세로 구분선은 묶음 배경으로 */
 #view-forecast .fc-vals,#view-forecast .fc-vals span{margin-left:0;}      /* 본부 줄(.jr-hqname span 의 왼쪽 여백 6px)도 칸이 맞게 */
 #view-forecast .jr-hqpick.fc-row{padding-right:14px;}
 #view-forecast .fc-row{align-items:stretch;} #view-forecast .fc-row > :not(.fc-vals){align-self:center;}
@@ -98,7 +99,7 @@ body.fc-pin-moving{user-select:none;}
   .fc-meta{margin:0 10px 8px;}
   .fc-cols{padding:4px 10px;}
   #view-forecast .fc-row,#view-forecast .jr-hqpick.fc-row{padding-left:10px;padding-right:10px;}
-  .fc-vals{grid-template-columns:50px 50px 38px 42px;}
+  .fc-vals{grid-template-columns:50px 50px 38px 42px;background-position:0 0,50px 0,100px 0,138px 0,179px 0;}
   .fc-row .fc-v{font-size:11.5px;}
   .fc-detail{padding:4px 8px 10px;font-size:11.5px;}
   .fc-detail th,.fc-detail td{padding:3px 2px;white-space:normal;}
