@@ -851,6 +851,48 @@ def t_range_buttons(b):
 
 TESTS += [t_range_buttons]
 
+def t_warn_layer(b):
+    """2026-11-22 사용자: 특보는 대설·한파·강풍, 범례에서 하나만 체크해 특보구역(날씨누리 표 × 행정동 경계)을 칠함 — 대설 빨강·한파 파랑·강풍 노랑,
+    예비 < 주의보 < 경보 진하게, 발효 전은 빗금. 켜면 격자 색 끔. 지사 목록에 특보 표시. 특보구역 관리: 관리자 바로 고침, 지사는 자기 지사 요청"""
+    p, m = open_page(b); p.click(".tab-btn[data-tab=forecast]"); p.wait_for_timeout(800)
+    lg = p.locator("#fc-legend")
+    check(lg.is_visible() and lg.locator("[data-fwk]").count() == 3 and not any(x.is_checked() for x in lg.locator("[data-fwk]").all()), "범례는 처음부터 보이고 특보 체크 3개(처음엔 모두 꺼짐)")
+    d = bid(p, "대관령"); gang = bid(p, "강릉")
+    badges = p.evaluate("[...document.querySelectorAll('#fc-tree .fw-b')].length")
+    p.click("#fc-tree [data-fchq='강원']"); p.wait_for_timeout(600)
+    bt = p.locator(f"#fc-tree [data-fcbr='{gang}'] .fw-b").all_inner_texts()
+    check(bt == ["대설경보", "강풍예비"] and "fut" in p.locator(f"#fc-tree [data-fcbr='{gang}'] .fw-b").nth(1).get_attribute("class"), f"지사 목록 특보 표시(발효 전은 테두리만): {bt}")
+    p.check("[data-fwk='대설']"); p.wait_for_timeout(1200)
+    fills = p.evaluate("[...document.querySelectorAll('.leaflet-fw-pane path')].filter(x=>x.getAttribute('fill')!=='none').map(x=>(x.getAttribute('class')||'').includes('fw-h-')?'hatch':x.getAttribute('fill'))")
+    outl = p.evaluate("[...document.querySelectorAll('.leaflet-fw-pane path')].filter(x=>x.getAttribute('fill')==='none').length")
+    check(sorted(fills) == ["#a3150f", "hatch"] and outl > 150, f"대설: 강릉산지 경보(발효) 진한 빨강 + 평창산지 주의보(발효 전) 빗금, 구역 테두리 {outl}개: {fills}")
+    check(p.evaluate("[...document.querySelectorAll('#fmap .leaflet-overlay-pane path')].every(x=>+x.getAttribute('fill-opacity')===0 || x.getAttribute('fill')==='none')"), "특보를 켜면 격자 색 끔")
+    p.check("[data-fwk='한파']"); p.wait_for_timeout(500)
+    check([x.get_attribute("data-fwk") for x in lg.locator("[data-fwk]").all() if x.is_checked()] == ["한파"], "한 번에 하나만 체크")
+    fills = p.evaluate("[...document.querySelectorAll('.leaflet-fw-pane path')].filter(x=>x.getAttribute('fill')!=='none').map(x=>x.getAttribute('fill'))")
+    check(fills == ["#4f86d9"], f"한파 주의보(발효) = 파랑: {fills}")
+    p.uncheck("[data-fwk='한파']"); p.wait_for_timeout(300)
+    check(p.locator(".leaflet-fw-pane path").count() == 0 and p.evaluate("[...document.querySelectorAll('#fmap .leaflet-overlay-pane path')].some(x=>+x.getAttribute('fill-opacity')>0)"), "끄면 특보 층 없음·격자 색 돌아옴")
+    # 관리자: 관리 창은 연 지사로, 바로 빼기
+    p.click("#fc-tree [data-fchq='충북']"); p.wait_for_timeout(600); p.click("#fc-tree [data-fcbr='B019']"); p.wait_for_timeout(800); p.click("[data-fwmgr]"); p.wait_for_timeout(600)
+    check(p.locator("#fw-br").input_value() == "B019" and p.locator(".fw-sheet .fw-list li").count() == 2 and p.locator("[data-fwask]").count() == 0, "관리 창: 연 지사(충주), 들어간 구역 2곳, 관리자는 요청 단추 없음")
+    p.locator("[data-fwset]").first.click(); p.wait_for_timeout(600)
+    check(any(c[0] == "POST" and c[1] == "B019" and c[3] is False for c in m.zone_calls if isinstance(c, tuple)), f"관리자 빼기 = 자동에서 뺌(include false): {m.zone_calls[-3:]}")
+    p.keyboard.press("Escape"); p.wait_for_timeout(200)
+    check(p.locator(".fw-modal").count() == 0, "Esc 로 닫힘")
+    # 지사 아이디: 자기 지사는 요청, 남의 지사는 보기만
+    p2_, m2 = open_page(b, user="exchungju"); p2_.click(".tab-btn[data-tab=forecast]"); p2_.wait_for_timeout(800)
+    p2_.click("[data-fwmgr]"); p2_.wait_for_timeout(600)
+    check(p2_.locator("#fw-br").input_value() == "B019" and p2_.locator("[data-fwask]").count() == 2 and p2_.locator("[data-fwset]").count() == 0, "지사: 자기 지사로 열리고 빼기 요청 단추")
+    p2_.locator("[data-fwask]").first.click(); p2_.click("[data-fwsend]"); p2_.wait_for_timeout(300)
+    check(p2_.locator(".fw-note.bad").count() == 1 and not m2.zone_reqs, "사유 없으면 보내지 않음")
+    p2_.fill("#fw-reason", "고속도로가 지나지 않음"); p2_.click("[data-fwsend]"); p2_.wait_for_timeout(700)
+    check(len(m2.zone_reqs) == 1 and m2.zone_reqs[0]["action"] == "remove" and p2_.locator(".fw-tag.req").count() == 1 and p2_.locator("[data-fwcancel]").count() == 1, "요청 보내면 '빼기 요청 중' + 요청 취소")
+    p2_.select_option("#fw-br", "B011"); p2_.wait_for_timeout(300)
+    check(p2_.locator("[data-fwask]").count() == 0 and p2_.locator("#fw-add").count() == 0 and "볼 수만" in p2_.locator("#fw-body").inner_text(), "남의 지사는 보기만")
+
+TESTS += [t_warn_layer]
+
 def t_value_colors(b):
     """2026-11-15 사용자: 3시간 표 신적설·강수강도의 옅은 파란 바탕 없앰, 1시간·3시간 표 칸 색이 값에 따라 바뀜(신적설·강수·강수확률·기온·습도). 0·없음은 색 없음.
     2026-11-16 사용자: 강수·강수강도·강수확률·습도도 파랑, 진하면 흰 글자. 기온 -5 이하·0 미만·0~4(색 없음)·4~10·10 이상, 습도 20 미만(건조)·20마다(20~40 색 없음)"""
@@ -929,7 +971,7 @@ def t_side_fold_legend_daylines(b):
     p, m = open_page(b); d = m.fc_cells[0][2][0]
     J(p, f"SSOpenForecast('{d}')"); p.locator('.fc-detail tbody tr').first.click(); p.wait_for_selector('#fc-daily table')
     lg = p.locator('#fc-legend')
-    check(lg.locator('.fc-legend-t').inner_text() == '24시간' and lg.inner_text().strip().startswith('24시간'), '범례 맨 앞 24시간')
+    check(lg.locator('.fc-legend-t').first.inner_text() == '24시간' and lg.inner_text().strip().startswith('24시간'), '범례 맨 앞 24시간(특보 줄은 그 아래, 2026-11-22)')
     names = [x.inner_text() for x in lg.locator('label.fc-chk span').all()]
     check(names == ['적설', '강수', '최대\n확률', '최저\n기온', '최대\n습도'], f'범례 이름(두 줄, 2026-11-10 최대 습도) {names}')
     check(not lg.locator('[data-fcshow=h]').is_checked(), '최대 습도는 처음엔 꺼 둠')

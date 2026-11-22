@@ -90,6 +90,22 @@ class Mock:
                             "warn_level": "경보", "warn_zones": [["L1041100", "충주", "경보"]], "warn_base": "202612150600", "warn_at": "2026-12-14T21:10:00Z", "warn_note": None}]
         self.eq_calls = []
         # 대설 특보(마이그레이션 23): warning_status 결과. 확정한 B019 는 확정할 때 경보로 고정돼 있고 지금은 주의보
+        # 특보(2026-11-22, forecast/warn.js): warning_active_list(지금 특보 전체) — 대설 경보(발효)·주의보(발효 전), 한파 주의보, 강풍 예비특보(발효 전)
+        _now = _dt.datetime.now(_dt.timezone.utc)
+        _ago, _soon = (_now - _dt.timedelta(hours=2)).isoformat(), (_now + _dt.timedelta(hours=5)).replace(minute=59, second=0, microsecond=0).isoformat()
+        self.warn_active = {"state": {"base": "x", "fetched_at": (_now - _dt.timedelta(minutes=4)).isoformat(), "ok": True, "note": None}, "needed": True, "all": True, "rows": [
+            {"zone": "L1022520", "name": "강릉산지", "kind": "대설", "level": "경보", "tm_fc": _ago, "tm_ef": _ago, "cmd": "발표", "branches": ["B012", "B015"]},
+            {"zone": "L1022420", "name": "평창산지", "kind": "대설", "level": "주의", "tm_fc": _ago, "tm_ef": _soon, "cmd": "발표", "branches": ["B012"]},
+            {"zone": "L1041100", "name": "음성", "kind": "한파", "level": "주의", "tm_fc": _ago, "tm_ef": _ago, "cmd": "발표", "branches": ["B017", "B019", "B021"]},
+            {"zone": "L1022310", "name": "양양평지", "kind": "강풍", "level": "예비", "tm_fc": _ago, "tm_ef": _soon, "cmd": "발표", "branches": ["B015", "B016"]}]}
+        self.zone_list = {"B019": [["L1040800", "충주", "auto"], ["L1041100", "음성", "auto"]], "B012": [["L1021100", "횡성", "auto"], ["L1022410", "평창평지", "auto"], ["L1022420", "평창산지", "auto"], ["L1022520", "강릉산지", "auto"]]}
+        self.zone_over, self.zone_calls = [], []
+        self.wzones = [{"zone_code": "L1020000", "name": "강원도", "sp": "00000002", "up_code": "L1000000"}, {"zone_code": "L1021100", "name": "횡성", "sp": "00000013", "up_code": "L1020000"},
+                       {"zone_code": "L1022400", "name": "평창", "sp": "00000003", "up_code": "L1020000"}, {"zone_code": "L1022410", "name": "평창평지", "sp": "00000014", "up_code": "L1022400"},
+                       {"zone_code": "L1022420", "name": "평창산지", "sp": "00010014", "up_code": "L1022400"}, {"zone_code": "L1022500", "name": "강릉", "sp": "00000103", "up_code": "L1020000"},
+                       {"zone_code": "L1022520", "name": "강릉산지", "sp": "00010014", "up_code": "L1022500"}, {"zone_code": "L1022510", "name": "강릉평지", "sp": "00000114", "up_code": "L1022500"},
+                       {"zone_code": "L1040000", "name": "충청북도", "sp": "00000002", "up_code": "L1000000"}, {"zone_code": "L1040800", "name": "충주", "sp": "00000013", "up_code": "L1040000"},
+                       {"zone_code": "L1041100", "name": "음성", "sp": "00000013", "up_code": "L1040000"}]
         self.warn_status = {"ok": True, "base": "202612150700", "fetched_at": "2026-12-14T22:00:00Z", "note": None,
                             "branches": {"B019": {"level": "주의", "zones": [["L1041100", "충주", "주의"]]}, "B011": {"level": "예비", "zones": [["L1021300", "횡성", "예비"]]}}}
         # 예상 적설·강수(마이그레이션 27·28): 격자 = data/grid_assign.json 기본 편입, 값 = 격자 번호로 만든 가짜 값(한 시간 전 발표)
@@ -354,9 +370,30 @@ class Mock:
                 ids = set(b.get("p_branches") or [])
                 cells = [[nx, ny, [x for x in bs if x in ids], sc(s), sc(p), t - 1, ta, None, pop, sc(ph), sc(sh), None] for nx, ny, bs, s, p, t, ta, sr, pop, ph, sh in self.fc_cells if ids & set(bs)] if ids else None
                 return send(200, {"status": "ok", "from": f0.isoformat(), "to": t0.isoformat(), "start_at": self.fc_start, "last_at": last.isoformat(), "tmfc": self.fc_issued, "bf": bf, "cells": cells})
+            if tbl == "warning_active_list" and "/rpc/" in path:
+                self.zone_calls.append(tbl); return send(200, self.warn_active) if self.usable(u) else send(401, {"message": "login"})
+            if tbl == "branch_zone_list" and "/rpc/" in path:
+                self.zone_calls.append(tbl); return send(200, self.zone_list) if self.usable(u) else send(401, {"message": "login"})
+            if tbl == "warning_zones": return send(200, self.wzones if self.usable(u) else [])
+            if tbl == "branch_zone_overrides":
+                if req.method == "GET": return send(200, self.zone_over if self.usable(u) else [])
+                if not self.active_admin(u): return send(403, {"message": "permission denied"})
+                bq, zq = (q.get("branch_id") or [""])[0].replace("eq.", ""), (q.get("zone_code") or [""])[0].replace("eq.", "")
+                if req.method == "DELETE": self.zone_over = [o for o in self.zone_over if not (o["branch_id"] == bq and o["zone_code"] == zq)]
+                else:
+                    self.zone_over = [o for o in self.zone_over if not (o["branch_id"] == body["branch_id"] and o["zone_code"] == body["zone_code"])] + [dict(body)]
+                self.zone_calls.append((req.method, bq or body.get("branch_id"), zq or body.get("zone_code"), body and body.get("include"))); return send(201 if req.method == "POST" else 204)
+            if tbl == "zone_request_create" and "/rpc/" in path:          # 111: 지사 = 자기 지사, 본부 = 자기 본부 지사만
+                pr = u["profile"]; self.zone_calls.append((tbl, body))
+                if pr["role"] == "admin": return send(400, {"message": "관리자는 요청 없이 바로 바꿉니다"})
+                if pr["role"] == "branch" and pr["branch_id"] != body["p_branch"]: return send(403, {"message": "자기 지사만 요청할 수 있습니다"})
+                self.zone_reqs.append({"id": len(self.zone_reqs) + 1, "branch_id": body["p_branch"], "zone_code": body["p_zone"], "zone_name": body["p_zone"], "action": body["p_action"], "reason": body["p_reason"], "by": pr["username"], "_uid": u["id"]})
+                return send(200, {"ok": True})
+            if tbl == "zone_request_resolve" and "/rpc/" in path:
+                self.zone_calls.append((tbl, body)); self.zone_reqs = [x for x in self.zone_reqs if x["id"] != body["p_id"]]; return send(200, {"ok": True})
             if tbl == "zone_request_list" and "/rpc/" in path:      # 특보구역 요청(마이그레이션 92): 관리자 = 대기 요청 전체, 그 밖 = 자기 것(시험에선 없음)
                 if not self.usable(u): return send(401, {"message": "login"})
-                return send(200, [dict(q, mine=False) for q in self.zone_reqs] if u["profile"].get("role") == "admin" else [])
+                return send(200, [dict(q, mine=q.get("_uid") == u["id"]) for q in self.zone_reqs if u["profile"].get("role") == "admin" or q.get("_uid") == u["id"]])
             if tbl == "warning_status" and "/rpc/" in path:
                 self.eq_calls.append((tbl, body)); return send(200, self.warn_status) if self.usable(u) else send(401, {"message": "login"})
             if tbl in ("save_fleet", "save_requests") and "/rpc/" in path:

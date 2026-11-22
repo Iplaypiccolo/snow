@@ -19,10 +19,12 @@
    - 서버 읽기: branch_forecast(지사 59줄) 한 번 + 본부를 열 때 forecast_grid(그 본부 지사들의 격자, 수 KB) + 지사를 열 때 그 지사 추이(약 10KB)
    - 격자 창(2026-11-09, 마이그레이션 83): 격자 자료(forecast_cell_detail, 약 11KB)는 처음 한 번 받아 격자별로 기억하고, 열려 있는 동안
      10분(받는 중이면 3분)마다 forecast_version(약 0.1KB)으로 바뀌었는지만 확인 → 바뀐 때만 다시 받음. 확인이 실패하면 예전처럼 다시 받음
+   - 특보(2026-11-22 사용자): forecast/warn.js(window.ForecastWarn) — 범례에서 대설·한파·강풍 중 하나를 체크하면 특보구역을 칠하고(그동안 격자 색은 끔),
+     옆 목록 지사 이름 옆에 특보 표시, 범례의 [특보구역 관리] 창. 범례는 이제 늘 보임(값 체크·적설 색띠는 지사를 열었을 때만)
    ============================================================ */
 (function () {
   'use strict';
-  var G = window.GridCore, JC = window.JurisCore;
+  var G = window.GridCore, JC = window.JurisCore, FW = window.ForecastWarn;
   var S = { rng: null, tailCache: {}, inited: false, map: null, lines: null, cells: null, hq: 'ALL', focus: null, state: null, bf: {}, grid: {}, series: {}, pin: null, pinAt: 0, names: null, meta: null, loading: false, pendingFocus: null, pinGeo: null };
 
   function $(id) { return document.getElementById(id); }
@@ -524,14 +526,14 @@
     S.cells.clearLayers();
     if (S.hq === 'ALL') return;
     var g = curGrid(S.hq); if (!g || !g.cells) return;
-    var fresh = g.tmfc && Date.now() - Date.parse(g.tmfc) <= STALE, fit = fitLines(cellPx());
+    var fresh = g.tmfc && Date.now() - Date.parse(g.tmfc) <= STALE, fit = fitLines(cellPx()), wOn = FW && FW.on();      // 특보를 켜면 격자 색은 끔(테두리·글자만)
     g.cells.forEach(function (c) {
       var nx = c[0], ny = c[1], bs = c[2] || [], snow = fresh ? c[3] : null, pcp = fresh ? c[4] : null, tmin = fresh ? c[5] : null, tat = fresh ? c[6] : null, pop = fresh && c[8] != null ? c[8] : null, phi = fresh ? c[9] : null, shi = fresh ? c[10] : null, reh = fresh && c[11] != null ? c[11] : null;      // phi·shi = 범위 위쪽(62), reh = 24시간 최고 습도(90)
       var mine = S.focus ? bs.indexOf(S.focus) >= 0 : true;
       if (S.focus && !mine) return;                                  // 지사를 고르면 그 지사 격자만
       var col = S.focus ? snowColor(snow > 0 ? snow : shi > 0 ? 0.5 : snow) : JC.colorOf(st(), bs[0], S.hq);      // ~1cm 만 있으면 '<1' 색
       var key = nx + ',' + ny, pinned = S.focus && S.pin === key;
-      var poly = L.polygon(G.cellCorners(nx, ny), { weight: pinned ? 4 : S.focus ? 1.5 : 1, color: pinned ? '#FFC400' : S.focus ? '#33424f' : col, fillColor: col, fillOpacity: S.focus ? 0.7 : 0.28, opacity: 0.9 });
+      var poly = L.polygon(G.cellCorners(nx, ny), { weight: pinned ? 4 : S.focus ? (wOn ? 1 : 1.5) : 1, color: pinned ? '#FFC400' : S.focus ? '#33424f' : col, fillColor: col, fillOpacity: wOn ? 0 : S.focus ? 0.7 : 0.28, opacity: wOn && !pinned ? 0.5 : 0.9 });
       var sr = S.focus && fresh && S.series[S.focus] ? S.series[S.focus][key] : null;
       poly.bindTooltip('<b>' + esc(cellName(nx, ny)) + '</b>' + cellNo(nx, ny) + '<br>' + bs.map(function (b) { return esc(bname(b)); }).join(', ') +
         (S.focus ? '<br>' + rngName() + ' 적설 <b>' + rng(snow, shi) + 'cm</b> · 강수 <b>' + rng(pcp, phi) + 'mm</b>' + (pop != null ? ' · 확률 최고 <b>' + pct(pop) + '%</b>' : '') + '<br>최저기온 <b>' + tmp(tmin) + '℃</b> (' + esc(hh(tat)) + ')' +
@@ -628,7 +630,7 @@
       return '<div class="jr-hq' + (open ? ' open' : '') + '"><div class="jr-hqname jr-hqpick fc-row' + (open ? ' on' : '') + '" data-fchq="' + esc(hq) + '">' +
         '<span class="chev">▶</span><span class="hn">' + esc(hq) + ' 본부</span>' + cellPair(hqMax(hq)) + '</div>' +
         (open ? ids.map(function (id) {
-          return '<div class="jr-br fc-row' + (S.focus === id ? ' on' : '') + '" data-fcbr="' + esc(id) + '"><i style="background:' + JC.colorOf(st(), id, hq) + '"></i><span class="n">' + esc(bname(id)) + '</span>' + cellPair(bval(id)) + '</div>' +
+          return '<div class="jr-br fc-row' + (S.focus === id ? ' on' : '') + '" data-fcbr="' + esc(id) + '"><i style="background:' + JC.colorOf(st(), id, hq) + '"></i><span class="n">' + esc(bname(id)) + (FW ? FW.badges(id) : '') + '</span>' + cellPair(bval(id)) + '</div>' +
             (S.focus === id ? detailHtml(id) : '');
         }).join('') : '') + '</div>';
     }).join('');
@@ -644,14 +646,16 @@
       rows.map(function (r) { return '<tr data-cell="' + r.nx + ',' + r.ny + '"><td>' + esc(cellName(r.nx, r.ny)) + cellNo(r.nx, r.ny) + '</td><td>' + rng(r.s, r.sh) + '</td><td>' + rng(r.p, r.ph) + '</td><td>' + pct(r.o) + '</td><td>' + tmp(r.t) + '</td><td>' + esc(hh(r.ta)) + '</td></tr>'; }).join('') +
       '</tbody></table></div>';
   }
-  function renderLegend() {             // 범례(2026-10-10 간단히): 칸 숫자 순서 + 적설량 색띠만
-    $('fc-legend').innerHTML = S.focus ? '<span class="fc-legend-t">' + rngName() + '</span><span class="fc-show" role="group" aria-label="지도 칸에 보일 값(' + rngName() + ')">' + SHOW_ITEMS.map(function (x) {
+  function renderLegend() {             // 범례(2026-10-10 간단히): 칸 숫자 순서 + 적설량 색띠(지사를 열었을 때) + 특보(늘, 2026-11-22)
+    var fl = $('fc-legend'); if (!fl) return;
+    fl.innerHTML = (S.focus ? '<div class="fc-row-vals"><span class="fc-legend-t">' + rngName() + '</span><span class="fc-show" role="group" aria-label="지도 칸에 보일 값(' + rngName() + ')">' + SHOW_ITEMS.map(function (x) {
           return '<label class="fc-chk ' + x[0] + '"><input type="checkbox" data-fcshow="' + x[0] + '"' + (S.show[x[0]] ? ' checked' : '') + '><span>' + x[1] + '</span></label>'; }).join('') + '</span>' +
-        '<span class="fc-ramp"><span class="fc-ramp-t">적설량</span><ol>' + SCALE.slice().reverse().map(function (x) { return '<li><i style="background:' + x[1] + '"></i>' + esc(x[2]) + '</li>'; }).join('') + '</ol></span>'
-      : '';
-    $('fc-legend').style.display = S.focus ? '' : 'none';
+        (FW && FW.on() ? '' : '<span class="fc-ramp"><span class="fc-ramp-t">적설량</span><ol>' + SCALE.slice().reverse().map(function (x) { return '<li><i style="background:' + x[1] + '"></i>' + esc(x[2]) + '</li>'; }).join('') + '</ol></span>') + '</div>'
+      : '') + (FW ? '<div class="fw-row">' + FW.legendHtml() + '</div>' : '');      // 지사 값 줄 아래에 특보 줄
+    fl.style.display = FW || S.focus ? '' : 'none';
   }
-  function render() { drawLines(); drawCells(); renderMeta(); renderTree(); renderLegend(); renderPin(); }
+  function render() { drawLines(); drawCells(); if (FW) FW.draw(S.map); renderMeta(); renderTree(); renderLegend(); renderPin(); }
+  function warnRepaint() { if (!S.map) return; drawCells(); FW.draw(S.map); renderTree(); renderLegend(); }      // 특보만 바뀜(목록·범례·지도 특보 층)
 
   /* ---------- 단계 이동 ---------- */
   function setHq(hq) {
@@ -701,10 +705,12 @@
     $('view-forecast').addEventListener('pointerdown', pinDrag);
     window.addEventListener('resize', onResize);      // 2026-11-16: 창 크기를 바꾸는 동안 배치 계산은 화면 한 장에 한 번(예전: 크기 바뀔 때마다 여러 번 재고 다시 그림)
     $('view-forecast').addEventListener('change', function (e) {         // 범례 체크박스: 지도 칸에 보일 값
+      if (FW && FW.onChange(e)) return;                                 // 특보 종류(하나만)
       var k = e.target && e.target.dataset && e.target.dataset.fcshow; if (!k) return;
       S.show[k] = !!e.target.checked; saveShow(); drawCells();
     });
     $('view-forecast').addEventListener('click', function (e) {
+      if (FW && FW.onClick(e, S.focus)) return;                         // [특보구역 관리](연 지사로)
       var t = e.target, h = t.closest && t.closest('[data-fchq]'); if (h) { setHq(S.hq === h.dataset.fchq ? 'ALL' : h.dataset.fchq); return; }
       var rb0 = t.closest && t.closest('[data-fcr]'); if (rb0) {                      // 110: 기간 단추
         var md = rb0.dataset.fcr;
@@ -733,11 +739,16 @@
     if (!G || !JC || !window.JURIS || !window.JURIS.doc) { root.innerHTML = '<div class="jr-empty" style="padding:30px">노선 자료를 불러오지 못했습니다.</div>'; return; }
     S.state = JC.resolve(window.JURIS.doc, window.JURIS.session || window.JURIS.committed || []);
     S.show = loadShow(); S.pinGeo = loadPinGeo(); buildShell(); bind(); S.inited = true;
+    if (FW) {
+      FW.setRedraw(warnRepaint);
+      setInterval(function () { var v = $('view-forecast'); if (S.map && v && v.offsetParent && !document.hidden) FW.refresh().then(warnRepaint); }, 5 * 60e3);      // 열려 있는 동안 5분마다(서버는 10분마다 받음)
+    }
   }
   function show() {
     if (!S.inited) return;
     S.state = JC.resolve(window.JURIS.doc, window.JURIS.session || window.JURIS.committed || []);    // 관할을 바꿨으면 반영
     ensureMap(); S.grid = {}; S.series = {}; S.pin = null; S.pinWhy = null;
+    if (FW) FW.refresh(true).then(warnRepaint);
     Promise.all([loadOverview(), loadNames()]).then(function () {
       var id = S.pendingFocus; S.pendingFocus = null;
       if (id && st().branches[id]) { S.hq = 'ALL'; S.focus = null; focusBranch(id); } else { render(); fitTo(); }

@@ -110,7 +110,7 @@
         '<div class="sg-who-card"><span class="sg-dot"></span><div><small>접속 계정</small><b>' + esc((me() || {}).display_name || '') + '</b><span class="sg-role">' + esc(ROLE[rk]) + '</span></div></div>' +
         '<div class="sg-two"><div class="sg-tile"><i class="cy"></i><b>강설량 측정</b><span>예보 · 신적설 · 관측소 · 관할</span></div><div class="sg-tile"><i class="vi"></i><b>장비 지원</b><span>요청 · 승인 · 배정 · 이동</span></div></div>' },
       { tab: 'forecast', title: '기관별 예보', desc: '기관별 앞으로 24시간 예상 적설 · 강수 · 최저기온 확인' },
-      E('forecast', '예보 구간', ['#fc-meta'], '다음 정시부터 24시간 (합 · 최저)', ['앞 6시간 = 초단기예보(10분마다) · 신적설만 단기예보', '나머지 = 단기예보']),
+      E('forecast', '예보 구간', ['#fc-meta'], '24시간 · 48시간 · 최대 · 기간 지정 (합 · 최저)', ['앞 6시간 = 초단기예보(10분마다) · 신적설만 단기예보', '나머지 = 단기예보']),
       E('forecast', '본부 목록', ['#fc-tree .fc-row'], '본부별 24시간 최대 적설 · 강수 · 확률 · 최저기온', ['본부 클릭 → 지사 목록']),
       E('forecast', '본부 펼치기', [upTo('#fc-tree .jr-hqpick.on', '.jr-hq')], '본부 클릭 → 지사 목록 · 지도에 그 본부 격자', [], { demo: fcHq }),
       E('forecast', '지사 고르기', [both(['#fc-tree .jr-br.on', '#fc-tree .fc-detail'])], '지사 클릭 → 그 지사 격자별 값 (적설 많은 순)', ['지명 클릭 → 지도에서 그 격자'], { demo: fcBranch }),
@@ -118,6 +118,8 @@
       E('forecast', '시간별 추이', ['#fc-pin'], '격자 클릭 → 24시간·3시간 예보를 별도 창으로 (적설 · 강수 · 기온)', ['그림에 마우스 → 시각별 값', '지도 빈 곳 클릭 → 닫힘'],
         { demo: function (d, undo) { fcBranch(d, undo); var pin = d.getElementById('fc-pin'); if (pin && pin.hidden) tap(q1(d, '#fc-tree tr[data-cell]')); } }),
       E('forecast', '칸 표시 · 범례', ['#fc-legend'], '지도 칸에 보일 값 고르기 · 적설량 색 기준', [], { demo: fcBranch }),
+      E('forecast', '특보', ['#fc-legend .fw-row'], '대설 · 한파 · 강풍 중 하나 체크 → 특보구역 색칠', ['예비특보 < 주의보 < 경보 순으로 진하게 · 빗금 = 발효 전', '지사 이름 옆 = 그 지사 특보']),
+      E('forecast', '특보구역 관리', ['#fc-legend [data-fwmgr]'], '지사마다 특보를 볼 구역 (관할 고속도로가 지나는 구역)', ['관리자 = 바로 더하기 · 빼기 · 요청 승인', '지사 · 본부 = 사유를 적어 요청']),
       { tab: 'snowtable', title: '연도별 신적설', desc: '지사 · 본부별 하루 신적설을 시즌 단위로 확인' },
       E('snowtable', '시즌 선택', ['#seasonSelect'], '최근 3시즌 중 고르기'),
       E('snowtable', '엑셀 내보내기', ['#exportXlsxBtn'], '지금 보이는 표 → xlsx 파일'),
