@@ -5,10 +5,18 @@
 .fc-stale{display:block;color:#8a5a00;font-size:12px;}
 #view-forecast .jr-side{width:440px;}      /* 확률 칸이 늘어 옆 목록을 조금 넓힘(다른 탭은 390px 그대로) */
 #view-forecast .jr-hqpick .hn,#view-forecast .jr-br .n{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.fc-cols{display:grid;grid-template-columns:minmax(0,1fr) 56px 56px 42px 50px;gap:4px;padding:4px 14px;font-size:11px;color:var(--muted);font-weight:700;text-align:right;}
-.fc-row .fc-v{width:56px;text-align:right;font-family:var(--mono);font-size:12px;font-weight:700;flex:none;}
+/* 2026-11-22 사용자: 제목(적설·강수·확률·최저)과 값이 같은 칸에 — 네 칸을 한 묶음(.fc-vals)으로 같은 너비, 가운데 정렬, 칸마다 세로 구분선. 오른쪽 여백도 줄마다 같게 */
+.fc-cols{display:flex;align-items:stretch;gap:8px;padding:4px 14px;font-size:11px;color:var(--muted);font-weight:700;}
+.fc-cols .fc-lab{flex:1;min-width:0;}
+.fc-vals{display:grid;grid-template-columns:56px 56px 42px 50px;flex:none;align-self:stretch;}
+.fc-vals > span{display:flex;align-items:center;justify-content:center;text-align:center;border-left:1px solid #d9e3ea;white-space:nowrap;}
+.fc-vals > span:last-child{border-right:1px solid #d9e3ea;}
+#view-forecast .fc-vals,#view-forecast .fc-vals span{margin-left:0;}      /* 본부 줄(.jr-hqname span 의 왼쪽 여백 6px)도 칸이 맞게 */
+#view-forecast .jr-hqpick.fc-row{padding-right:14px;}
+#view-forecast .fc-row{align-items:stretch;} #view-forecast .fc-row > :not(.fc-vals){align-self:center;}
+.fc-row .fc-v{font-family:var(--mono);font-size:12px;font-weight:700;}
 .fc-row .fc-v i{font-style:normal;font-weight:400;font-size:10px;color:var(--muted);margin-left:1px;}
-.fc-row .fc-v.s{color:#2e5fb8;} .fc-row .fc-v.p{color:#2f7d4f;} .fc-row .fc-v.o{color:#1f7a8c;width:42px;} .fc-row .fc-v.t{color:#b0392b;width:50px;}
+.fc-row .fc-v.s{color:#2e5fb8;} .fc-row .fc-v.p{color:#2f7d4f;} .fc-row .fc-v.o{color:#1f7a8c;} .fc-row .fc-v.t{color:#b0392b;}
 .fc-detail{padding:4px 12px 10px 22px;font-size:12px;}
 .fc-detail table{width:100%;border-collapse:collapse;}
 .fc-detail th,.fc-detail td{padding:3px 4px;text-align:right;border-bottom:1px solid #eee;font-family:var(--mono);white-space:nowrap;}
@@ -88,9 +96,10 @@ body.fc-pin-moving{user-select:none;}
 @media (max-width:760px){
   #view-forecast .jr-side{width:100%;}
   .fc-meta{margin:0 10px 8px;}
-  .fc-cols{padding:4px 10px;grid-template-columns:minmax(0,1fr) 50px 50px 38px 42px;gap:2px;}
-  #view-forecast .fc-row{padding-left:10px;padding-right:10px;}
-  .fc-row .fc-v{width:50px;font-size:11.5px;} .fc-row .fc-v.o{width:38px;} .fc-row .fc-v.t{width:42px;}
+  .fc-cols{padding:4px 10px;}
+  #view-forecast .fc-row,#view-forecast .jr-hqpick.fc-row{padding-left:10px;padding-right:10px;}
+  .fc-vals{grid-template-columns:50px 50px 38px 42px;}
+  .fc-row .fc-v{font-size:11.5px;}
   .fc-detail{padding:4px 8px 10px;font-size:11.5px;}
   .fc-detail th,.fc-detail td{padding:3px 2px;white-space:normal;}
   .fc-detail td{white-space:nowrap;}

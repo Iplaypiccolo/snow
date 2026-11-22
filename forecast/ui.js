@@ -540,7 +540,11 @@
         (fresh ? '' : '<div class="fc-stale">예보 없음(12시간 넘게 새 예보를 받지 못함)</div>')
       : '<span class="fc-stale">예보 없음</span>';
   }
+  // 2026-11-22 사용자 "제목이 칸과 맞지 않아 보임": 값 네 칸을 한 묶음(fc-vals, 제목 줄과 같은 칸 너비)으로 — 가운데 정렬·세로 구분선은 style.css
   function cellPair(f) {
+    return '<span class="fc-vals">' + cellVals(f) + '</span>';
+  }
+  function cellVals(f) {
     return f ? '<span class="fc-v s">' + rng(f.max_snow_24h, f.max_snow_hi) + '<i>cm</i></span><span class="fc-v p">' + rng(f.max_pcp_24h, f.max_pcp_hi) + '<i>mm</i></span><span class="fc-v o">' + pct(f.max_pop_24h) + (f.max_pop_24h == null ? '' : '<i>%</i>') + '</span><span class="fc-v t">' + tmp(f.min_tmp) + '<i>℃</i></span>'
       : '<span class="fc-v s">-</span><span class="fc-v p">-</span><span class="fc-v o">-</span><span class="fc-v t">-</span>';
   }
@@ -553,7 +557,7 @@
     return s == null && p == null ? null : { max_snow_24h: s, max_pcp_24h: p, max_snow_hi: sh, max_pcp_hi: ph, max_pop_24h: o, min_tmp: t };
   }
   function renderTree() {
-    var html = '<div class="fc-cols"><span></span><span>적설</span><span>강수</span><span>확률</span><span>최저</span></div>' + st().hqs.filter(function (h) { return !JC.isPrivate(h); }).map(function (hq) {
+    var html = '<div class="fc-cols"><span class="fc-lab"></span><span class="fc-vals"><span>적설</span><span>강수</span><span>확률</span><span>최저</span></span></div>' + st().hqs.filter(function (h) { return !JC.isPrivate(h); }).map(function (hq) {
       var ids = branchesOf(hq); if (!ids.length) return '';
       var open = S.hq === hq;
       return '<div class="jr-hq' + (open ? ' open' : '') + '"><div class="jr-hqname jr-hqpick fc-row' + (open ? ' on' : '') + '" data-fchq="' + esc(hq) + '">' +
