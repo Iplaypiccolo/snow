@@ -910,6 +910,20 @@ def t_range_idle_revisit(b):
 
 TESTS += [t_range_idle_revisit]
 
+def t_detail_table_center_date(b):
+    """2026-11-22 사용자: 지사 격자 표 가운데 정렬·칸 구분선, 기간이 24시간보다 길면 최저 시각에 날짜도(표가 옆으로 넘치지 않게 날짜는 윗줄에 작게)"""
+    p, m = open_page(b); p.click(".tab-btn[data-tab=forecast]"); p.wait_for_timeout(800)
+    d = bid(p, "대관령"); p.click("#fc-tree [data-fchq='강원']"); p.wait_for_timeout(600); p.click(f"#fc-tree [data-fcbr='{d}']"); p.wait_for_timeout(1200)
+    st = J(p, "(() => { const c = document.querySelector('#fc-tree .fc-detail tbody td:nth-child(2)'), s = getComputedStyle(c); return [s.textAlign, s.borderLeftWidth, s.borderLeftStyle]; })()")
+    check(st[0] == "center" and st[1] != "0px" and st[2] == "solid", f"값 칸 가운데 정렬·세로 구분선: {st}")
+    t24 = p.locator("#fc-tree .fc-detail tbody tr").first.locator("td").last.inner_text()
+    check("/" not in t24 and t24.endswith("시"), "24시간: 시각만 " + t24)
+    p.click("[data-fcr='max']"); p.wait_for_timeout(1500)
+    tm = p.locator("#fc-tree .fc-detail tbody tr").first.locator("td").last.inner_text()
+    check("/" in tm and tm.endswith("시") and J(p, "[...document.querySelectorAll('#fc-tree .fc-detail')].every(x => x.scrollWidth <= x.clientWidth + 1)"), "최대: 날짜도, 표 안 넘침 " + tm.replace(chr(10), " "))
+
+TESTS += [t_detail_table_center_date]
+
 def t_value_colors(b):
     """2026-11-15 사용자: 3시간 표 신적설·강수강도의 옅은 파란 바탕 없앰, 1시간·3시간 표 칸 색이 값에 따라 바뀜(신적설·강수·강수확률·기온·습도). 0·없음은 색 없음.
     2026-11-16 사용자: 강수·강수강도·강수확률·습도도 파랑, 진하면 흰 글자. 기온 -5 이하·0 미만·0~4(색 없음)·4~10·10 이상, 습도 20 미만(건조)·20마다(20~40 색 없음)"""

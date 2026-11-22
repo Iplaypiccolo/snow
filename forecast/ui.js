@@ -39,6 +39,12 @@
   function tmp(v) { return v == null ? '-' : String(Math.round(v * 10) / 10); }                 // 기온(℃): -5, 1.5
   function pct(v) { return v == null ? '-' : String(Math.round(v)); }                             // 강수확률(%): 60
   function hh(iso) { var d = iso ? new Date(iso) : null; return d && !isNaN(d) ? p2(d.getHours()) + '시' : '-'; }
+  // 최저기온 시각: 24시간이면 '22시', 그보다 긴 기간이면 날짜도(2026-11-22 사용자). block = 표 칸용(날짜를 작게 윗줄에 — 칸이 넓어지지 않게)
+  function hhR(iso, block) {
+    var d = iso ? new Date(iso) : null; if (!d || isNaN(d) || !rngOn()) return esc(hh(iso));
+    var md = (d.getMonth() + 1) + '/' + d.getDate();
+    return block ? '<small class="fc-d">' + md + '</small>' + esc(hh(iso)) : esc(md + ' ' + hh(iso));
+  }
   var STALE = 12 * 3600e3;                                 // 발표 후 12시간이 지난 예보는 쓰지 않음(장비 지원 화면과 같음)
   // 24시간 예상 적설(cm) → 칸 색
   var SCALE = [[20, '#c0392b', '20+'], [10, '#8e44ad', '10+'], [5, '#2e5fb8', '5+'], [1, '#5b9be0', '1+'], [0.1, '#a9cdf2', '<1'], [0, '#eef3f8', '0']];
@@ -536,7 +542,7 @@
       var poly = L.polygon(G.cellCorners(nx, ny), { weight: pinned ? 4 : S.focus ? (wOn ? 1 : 1.5) : 1, color: pinned ? '#FFC400' : S.focus ? '#33424f' : col, fillColor: col, fillOpacity: wOn ? 0 : S.focus ? 0.7 : 0.28, opacity: wOn && !pinned ? 0.5 : 0.9 });
       var sr = S.focus && fresh && S.series[S.focus] ? S.series[S.focus][key] : null;
       poly.bindTooltip('<b>' + esc(cellName(nx, ny)) + '</b>' + cellNo(nx, ny) + '<br>' + bs.map(function (b) { return esc(bname(b)); }).join(', ') +
-        (S.focus ? '<br>' + rngName() + ' 적설 <b>' + rng(snow, shi) + 'cm</b> · 강수 <b>' + rng(pcp, phi) + 'mm</b>' + (pop != null ? ' · 확률 최고 <b>' + pct(pop) + '%</b>' : '') + '<br>최저기온 <b>' + tmp(tmin) + '℃</b> (' + esc(hh(tat)) + ')' +
+        (S.focus ? '<br>' + rngName() + ' 적설 <b>' + rng(snow, shi) + 'cm</b> · 강수 <b>' + rng(pcp, phi) + 'mm</b>' + (pop != null ? ' · 확률 최고 <b>' + pct(pop) + '%</b>' : '') + '<br>최저기온 <b>' + tmp(tmin) + '℃</b> (' + hhR(tat) + ')' +
           (sr ? trendBox(sr, S.series[S.focus]._start, false) : '') : ''),
         { sticky: true, opacity: 1, className: 'gr-tip' + (sr ? ' fc-tip' : '') });
       poly.on('click', function () {
@@ -654,7 +660,7 @@
       .map(function (c) { return { nx: c[0], ny: c[1], s: fresh ? c[3] : null, p: fresh ? c[4] : null, t: fresh ? c[5] : null, ta: fresh ? c[6] : null, o: fresh && c[8] != null ? c[8] : null, ph: fresh ? c[9] : null, sh: fresh ? c[10] : null }; })
       .sort(function (a, b) { return (b.s || 0) - (a.s || 0) || (b.p || 0) - (a.p || 0) || (a.t == null ? 99 : a.t) - (b.t == null ? 99 : b.t); });
     return '<div class="fc-detail"><table><thead><tr><th>지명</th><th>적설(cm)</th><th>강수(mm)</th><th>확률(%)</th><th>최저(℃)</th><th>시각</th></tr></thead><tbody>' +
-      rows.map(function (r) { return '<tr data-cell="' + r.nx + ',' + r.ny + '"><td>' + esc(cellName(r.nx, r.ny)) + cellNo(r.nx, r.ny) + '</td><td>' + rng(r.s, r.sh) + '</td><td>' + rng(r.p, r.ph) + '</td><td>' + pct(r.o) + '</td><td>' + tmp(r.t) + '</td><td>' + esc(hh(r.ta)) + '</td></tr>'; }).join('') +
+      rows.map(function (r) { return '<tr data-cell="' + r.nx + ',' + r.ny + '"><td>' + esc(cellName(r.nx, r.ny)) + cellNo(r.nx, r.ny) + '</td><td>' + rng(r.s, r.sh) + '</td><td>' + rng(r.p, r.ph) + '</td><td>' + pct(r.o) + '</td><td>' + tmp(r.t) + '</td><td>' + hhR(r.ta, true) + '</td></tr>'; }).join('') +
       '</tbody></table></div>';
   }
   function renderLegend() {             // 범례(2026-10-10 간단히): 칸 숫자 순서 + 적설량 색띠(지사를 열었을 때) + 특보(늘, 2026-11-22)

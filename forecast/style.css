@@ -29,9 +29,10 @@
 .fc-row .fc-v.s{color:#2e5fb8;} .fc-row .fc-v.p{color:#2f7d4f;} .fc-row .fc-v.o{color:#1f7a8c;} .fc-row .fc-v.t{color:#b0392b;}
 .fc-detail{padding:4px 12px 10px 22px;font-size:12px;}
 .fc-detail table{width:100%;border-collapse:collapse;}
-.fc-detail th,.fc-detail td{padding:3px 4px;text-align:right;border-bottom:1px solid #eee;font-family:var(--mono);white-space:nowrap;}
+.fc-detail th,.fc-detail td{padding:3px 4px;text-align:center;vertical-align:middle;border:1px solid #d3dce3;font-family:var(--mono);white-space:nowrap;}      /* 2026-11-22 사용자: 가운데 정렬 + 칸 구분선 */
 .fc-detail th{font-size:11px;} .fc-detail td:first-child{white-space:normal;}
-.fc-detail th{color:var(--muted);font-weight:600;font-family:inherit;} .fc-detail th:first-child,.fc-detail td:first-child{text-align:left;}
+.fc-detail th{color:var(--muted);font-weight:600;font-family:inherit;background:#f1f5f8;} .fc-detail th:first-child,.fc-detail td:first-child{text-align:left;}      /* 지명은 길어서 왼쪽 */
+.fc-detail .fc-d{display:block;font-size:9.5px;line-height:1.1;color:var(--muted);}      /* 긴 기간: 최저 시각 위 날짜 */
 .fc-detail tr[data-cell]{cursor:pointer;} .fc-detail tr[data-cell]:hover{background:#f3f7fa;}
 .fc-legend{gap:6px 14px;padding:7px 10px;color:var(--ink);}
 /* 범례: 칸 숫자 순서(지도 칸의 글자와 같은 모양) + 적설량 색띠 */
