@@ -310,4 +310,4 @@ body.fc-pin-moving{user-select:none;}
 .fw-ask input{flex:1;min-width:160px;}
 .fw-note{margin:0 0 8px;padding:6px 9px;border-radius:6px;background:#e9f5ec;color:#1d5a2c;font-weight:700;}
 .fw-note.bad{background:#fdecea;color:#8f1d14;}
-@media (max-width:760px){.fw-src{display:none;}.fw-sheet{padding:14px 12px;}}
+@media (max-width:760px){.fw-src{font-size:9px;flex-basis:100%;}.fw-sheet{padding:14px 12px;}}      /* 휴대폰에서도 경계 출처는 보임(이용 조건) */

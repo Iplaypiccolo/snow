@@ -124,7 +124,7 @@
     return (old ? '<span class="fc-stale">' : '') + '기상청 ' + p2(d.getHours()) + ':' + p2(d.getMinutes()) + ' 받음' + (old ? '(30분 넘음)</span>' : '');
   }
   function legendHtml() {
-    var k = W.kind, zm = k ? zoneMap(k) : {}, n = Object.keys(zm).length;
+    var k = W.kind, zm = k ? zoneMap(k) : {}, n = W.areas ? Object.keys(zm).filter(function (c) { return W.areas.zones[c]; }).length : 0;      // 지도에 칠한 구역만(제주·섬·구례산간 특보는 안 셈)
     var chk = KINDS.map(function (x, i) {
       return '<label class="fw-k k' + i + '"><input type="checkbox" data-fwk="' + x + '"' + (k === x ? ' checked' : '') + '><span>' + x + '</span></label>';
     }).join('');
@@ -167,7 +167,8 @@
       if (!x[0].ok || !x[1].ok || !x[2].ok || !x[4].ok) return { err: '특보구역을 불러오지 못했습니다.' };
       var zones = x[2].json, byCode = {}; zones.forEach(function (z) { byCode[z.zone_code] = z; });
       var hq = {}, ord = {}; (x[5].ok ? x[5].json : []).forEach(function (r, i) { if (!r.is_private) { hq[r.id] = r.name; ord[r.id] = i; } });
-      var brs = (x[4].json || []).filter(function (b) { return hq[b.hq_id] != null; }).sort(function (a, b) { return ord[a.hq_id] - ord[b.hq_id] || (a.id < b.id ? -1 : 1); });      // 본부 순서 → 지사 번호
+      var brs = (x[4].json || []).filter(function (b) { return !x[5].ok || hq[b.hq_id] != null; })      // 본부 목록을 못 받으면 지사는 모두(본부 이름 없이)
+        .sort(function (a, b) { return (ord[a.hq_id] || 0) - (ord[b.hq_id] || 0) || (a.id < b.id ? -1 : 1); });      // 본부 순서 → 지사 번호
       return { list: x[0].json || {}, over: x[1].json || [], zones: zones, byCode: byCode, reqs: x[3].ok ? x[3].json || [] : [], branches: brs, hq: hq };
     }).catch(function () { return { err: SSAuth.NET_MSG }; });
   }
@@ -224,7 +225,7 @@
       return '<li><span><b>' + esc(bname(q.branch_id)) + '</b> · ' + esc(zlabel(q.zone_code)) + ' <span class="fw-tag">' + (q.action === 'add' ? '더하기' : '빼기') + '</span><br><span class="muted">' + esc(q.reason) + ' — ' + esc(q.by || '') + '</span></span>' +
         '<span><button type="button" class="fw-btn pri" data-fwok="' + q.id + '">승인</button><button type="button" class="fw-btn" data-fwno="' + q.id + '">반려</button></span></li>';
     }).join('') + '</ul>' : '';
-    var opts = d.branches.map(function (b) { return '<option value="' + esc(b.id) + '"' + (b.id === bid ? ' selected' : '') + '>' + esc((d.hq[b.hq_id] || '') + ' · ' + b.name) + '</option>'; }).join('');
+    var opts = d.branches.map(function (b) { return '<option value="' + esc(b.id) + '"' + (b.id === bid ? ' selected' : '') + '>' + esc((d.hq[b.hq_id] ? d.hq[b.hq_id] + ' · ' : '') + b.name) + '</option>'; }).join('');
     var who = adm ? '관리자는 바로 더하고 뺍니다.' : ask ? '더하기·빼기는 사유를 적어 관리자에게 요청합니다. 관리자가 승인하면 바뀝니다.'
       : m.role === 'branch' || m.role === 'hq' ? '이 지사는 볼 수만 있습니다(' + (m.role === 'branch' ? '자기 지사' : '자기 본부 지사') + '만 요청할 수 있음).' : '볼 수만 있습니다(요청은 지사·본부 아이디).';
     $('fw-body').className = '';

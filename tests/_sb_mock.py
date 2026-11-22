@@ -97,6 +97,7 @@ class Mock:
             {"zone": "L1022520", "name": "강릉산지", "kind": "대설", "level": "경보", "tm_fc": _ago, "tm_ef": _ago, "cmd": "발표", "branches": ["B012", "B015"]},
             {"zone": "L1022420", "name": "평창산지", "kind": "대설", "level": "주의", "tm_fc": _ago, "tm_ef": _soon, "cmd": "발표", "branches": ["B012"]},
             {"zone": "L1041100", "name": "음성", "kind": "한파", "level": "주의", "tm_fc": _ago, "tm_ef": _ago, "cmd": "발표", "branches": ["B017", "B019", "B021"]},
+            {"zone": "L1090500", "name": "제주도산지", "kind": "대설", "level": "경보", "tm_fc": _ago, "tm_ef": _ago, "cmd": "발표", "branches": []},      # 제주: 지도엔 없음 → 범례 수에서 뺌
             {"zone": "L1022310", "name": "양양평지", "kind": "강풍", "level": "예비", "tm_fc": _ago, "tm_ef": _soon, "cmd": "발표", "branches": ["B015", "B016"]}]}
         self.zone_list = {"B019": [["L1040800", "충주", "auto"], ["L1041100", "음성", "auto"]], "B012": [["L1021100", "횡성", "auto"], ["L1022410", "평창평지", "auto"], ["L1022420", "평창산지", "auto"], ["L1022520", "강릉산지", "auto"]]}
         self.zone_over, self.zone_calls = [], []

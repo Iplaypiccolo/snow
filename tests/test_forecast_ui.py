@@ -868,6 +868,7 @@ def t_warn_layer(b):
     p.check("[data-fwk='대설']"); p.wait_for_timeout(1200)
     fills = p.evaluate("[...document.querySelectorAll('.leaflet-fw-pane path')].filter(x=>x.getAttribute('fill')!=='none').map(x=>(x.getAttribute('class')||'').includes('fw-h-')?'hatch':x.getAttribute('fill'))")
     outl = p.evaluate("[...document.querySelectorAll('.leaflet-fw-pane path')].filter(x=>x.getAttribute('fill')==='none').length")
+    check(p.locator(".fw-n").inner_text() == "2곳", "범례 수 = 지도에 칠한 구역만(제주 대설경보는 안 셈): " + p.locator(".fw-n").inner_text())
     check(sorted(fills) == ["#a3150f", "hatch"] and outl > 150, f"대설: 강릉산지 경보(발효) 진한 빨강 + 평창산지 주의보(발효 전) 빗금, 구역 테두리 {outl}개: {fills}")
     check(p.evaluate("[...document.querySelectorAll('#fmap .leaflet-overlay-pane path')].every(x=>+x.getAttribute('fill-opacity')===0 || x.getAttribute('fill')==='none')"), "특보를 켜면 격자 색 끔")
     p.check("[data-fwk='한파']"); p.wait_for_timeout(500)
@@ -895,6 +896,19 @@ def t_warn_layer(b):
     check(p2_.locator("[data-fwask]").count() == 0 and p2_.locator("#fw-add").count() == 0 and "볼 수만" in p2_.locator("#fw-body").inner_text(), "남의 지사는 보기만")
 
 TESTS += [t_warn_layer]
+
+def t_range_idle_revisit(b):
+    """2026-11-22 점검: [기간 지정]만 누르고 [보기] 전에 다른 탭에 다녀와도 '불러오는 중'에 멈추지 않음. 날짜를 비우면 '날짜를 골라' 안내"""
+    p, m = open_page(b); msgs = []; p.on("dialog", lambda d: msgs.append(d.message))
+    p.click(".tab-btn[data-tab=forecast]"); p.wait_for_timeout(800)
+    p.click("[data-fcr='48']"); p.wait_for_timeout(700); p.click("[data-fcr='custom']"); p.wait_for_timeout(500)
+    p.click(".tab-btn[data-tab=snowtable]"); p.wait_for_timeout(500); p.click(".tab-btn[data-tab=forecast]"); p.wait_for_timeout(1200)
+    t = p.locator("#fc-meta").inner_text()
+    check("불러오는 중" not in t and "(48시간 합·최저)" in t and not errors, f"다녀와도 앞 값 그대로: {t} {errors}")
+    p.locator("[data-fcr-from]").fill(""); p.click("[data-fcr-apply]"); p.wait_for_timeout(300)
+    check(msgs and "날짜를 골라" in msgs[-1], f"날짜를 비우면 날짜 안내: {msgs}")
+
+TESTS += [t_range_idle_revisit]
 
 def t_value_colors(b):
     """2026-11-15 사용자: 3시간 표 신적설·강수강도의 옅은 파란 바탕 없앰, 1시간·3시간 표 칸 색이 값에 따라 바뀜(신적설·강수·강수확률·기온·습도). 0·없음은 색 없음.

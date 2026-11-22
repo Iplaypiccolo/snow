@@ -730,6 +730,7 @@
         setRange(md); return; }
       if (t.closest && t.closest('[data-fcr-apply]')) {
         var f0 = pickVal('from'), t0 = pickVal('to');
+        if (isNaN(f0) || isNaN(t0)) { alert('시작·끝 날짜를 골라 주세요.'); return; }
         if (!(f0 < t0)) { alert('끝은 시작보다 뒤여야 합니다.'); return; }
         f0 = Math.floor(f0 / H) * H; t0 = Math.floor(t0 / H) * H;
         var keep = S.rng; setRange('custom', f0, t0 - H); if (S.rng) { S.rng.pickFrom = f0; S.rng.pickTo = t0; S.rng.lastAt = keep && keep.lastAt; }
@@ -762,7 +763,7 @@
     Promise.all([loadOverview(), loadNames()]).then(function () {
       var id = S.pendingFocus; S.pendingFocus = null;
       if (id && st().branches[id]) { S.hq = 'ALL'; S.focus = null; focusBranch(id); } else { render(); fitTo(); }
-      if (rngOn()) { var r0 = S.rng; setRange(r0.mode, r0.ask && r0.ask[0], r0.ask && r0.ask[1]); }      // 110: 예보가 바뀌었을 수 있어 기간 값 다시
+      if (rngOn() && S.rng.ask) { var r0 = S.rng; setRange(r0.mode, r0.ask[0], r0.ask[1]); }      // [기간 지정]만 누르고 [보기] 전이면(ask 없음) 다시 받지 않음      // 110: 예보가 바뀌었을 수 있어 기간 값 다시
     });
     render();
   }

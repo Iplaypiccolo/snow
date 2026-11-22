@@ -22,6 +22,7 @@ from collections import defaultdict
 from pathlib import Path
 from shapely.geometry import shape, mapping
 from shapely.ops import unary_union
+import numpy, shapely
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -73,7 +74,7 @@ EXCLUDE = {'L1010900': '강화', 'L1013600': '옹진', 'L1014200': '백령도.�
            'L1072100': '울릉도.독도', 'L1082200': '거제', 'L1082400': '남해', 'L1053020': '구례산간'}
 # 섬 구역 행정동(나뉜 시·군 안): 표 목록에 있지만 섬이라 뺌
 ISLAND_DONG = {('군산시', '옥도면'), ('부안군', '위도면'), ('영광군', '낙월면')}
-SIMPLIFY_DEG, ROUND = 0.0012, 3          # 약 120 m 로 줄이고 소수 셋째 자리(약 100 m)
+SIMPLIFY_DEG, ROUND = 0.0025, 3          # 이웃 구역을 함께 줄이는 정도(coverage_simplify, 대략 길이 도 단위)와 소수 셋째 자리(약 100 m)
 MIN_PART_KM2 = 15                        # 이보다 작은 조각(작은 섬 등)은 그리지 않음 — 사용자 "섬은 다 빼"
 
 
@@ -217,8 +218,11 @@ def main(geo, zpath, tpath):
     for i, code in out.items():
         groups[code].append(shape(feats[i]['geometry']).buffer(0))
     zones, npts = {}, 0
-    for code in sorted(groups):
-        g = unary_union(groups[code]).simplify(SIMPLIFY_DEG, preserve_topology=True)
+    codes = sorted(groups)
+    # 이웃 구역이 같은 경계선을 함께 쓰도록 한꺼번에 줄임(구역마다 따로 줄이면 경계에 틈·겹침이 생김, 2026-11-22 점검)
+    merged = [unary_union(groups[c]) for c in codes]
+    simple = shapely.coverage_simplify(shapely.make_valid(numpy.array(merged, dtype=object)), SIMPLIFY_DEG, simplify_boundary=True)
+    for code, g in zip(codes, simple):
         parts = list(g.geoms) if g.geom_type == 'MultiPolygon' else [g]
         km2 = lambda q: q.area * 111 * 111 * 0.8
         keep = [q for q in parts if km2(q) >= MIN_PART_KM2] or [max(parts, key=lambda q: q.area)]
