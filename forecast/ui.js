@@ -586,15 +586,26 @@
   }
 
   /* ---------- 옆 목록 ---------- */
+  // 기간 지정 칸: 날짜 + 시(00~23시). 분은 없음(2026-11-22 사용자 "예보가 시간 단위라 분은 지정 안 해도 돼")
+  function pickHtml(k, label, ms, minMs, maxMs) {
+    var d = new Date(ms), day = localInput(ms).slice(0, 10), h = d.getHours(), opts = '';
+    for (var i = 0; i < 24; i++) opts += '<option value="' + i + '"' + (i === h ? ' selected' : '') + '>' + p2(i) + '시</option>';
+    return '<label>' + label + ' <input type="date" data-fcr-' + k + ' value="' + day + '" min="' + localInput(minMs).slice(0, 10) + '" max="' + localInput(maxMs).slice(0, 10) + '">' +
+      '<select data-fcr-' + k + 'h aria-label="' + label + ' 시">' + opts + '</select></label>';
+  }
+  function pickVal(k) {
+    var v = $('view-forecast'), di = v.querySelector('[data-fcr-' + k + ']'), hi = v.querySelector('[data-fcr-' + k + 'h]');
+    var m = di && /^(\d{4})-(\d{2})-(\d{2})$/.exec(di.value); if (!m || !hi) return NaN;
+    return new Date(+m[1], +m[2] - 1, +m[3], +hi.value).getTime();
+  }
   function renderMeta() {
     var m = S.meta, fresh = m && Date.now() - Date.parse(m.tmfc) <= STALE, r = S.rng, mode = r ? r.mode : '24';
     var btn = function (k, t) { return '<button type="button" data-fcr="' + k + '" aria-pressed="' + (mode === k) + '">' + t + '</button>'; };
     var bar = m && m.start ? '<div class="fc-range" role="group" aria-label="합·최저를 볼 기간">' + btn('24', '24시간') + btn('48', '48시간') + btn('max', '최대') + btn('custom', '기간 지정') + '</div>' : '';
     if (mode === 'custom' && m && m.start) {
       var lo = Date.parse(m.start), hi = (r.lastAt || lo + 23 * H) + H;
-      bar += '<div class="fc-range-pick"><label>시작 <input type="datetime-local" step="3600" data-fcr-from value="' + localInput(r.pickFrom != null ? r.pickFrom : lo) + '" min="' + localInput(lo) + '" max="' + localInput(hi - H) + '"></label>' +
-        '<label>끝 <input type="datetime-local" step="3600" data-fcr-to value="' + localInput(r.pickTo != null ? r.pickTo : Math.min(lo + 24 * H, hi)) + '" min="' + localInput(lo + H) + '" max="' + localInput(hi) + '"></label>' +
-        '<button type="button" data-fcr-apply>보기</button></div>';
+      bar += '<div class="fc-range-pick">' + pickHtml('from', '시작', r.pickFrom != null ? r.pickFrom : lo, lo, hi - H) +
+        pickHtml('to', '끝', r.pickTo != null ? r.pickTo : Math.min(lo + 24 * H, hi), lo + H, hi) + '<button type="button" data-fcr-apply>보기</button></div>';
     }
     var title = '';
     if (m && m.start) {
@@ -718,8 +729,7 @@
           if (S.rng.lastAt == null) { setRange('max'); S.rng.mode = 'custom'; } else { S.rng.bf = pr && pr.mode !== '24' ? pr.bf : null; S.rng.grid = pr && pr.mode !== '24' ? pr.grid : {}; } render(); return; }
         setRange(md); return; }
       if (t.closest && t.closest('[data-fcr-apply]')) {
-        var fi = $('view-forecast').querySelector('[data-fcr-from]'), ti = $('view-forecast').querySelector('[data-fcr-to]');
-        var f0 = fi && fi.value ? new Date(fi.value).getTime() : NaN, t0 = ti && ti.value ? new Date(ti.value).getTime() : NaN;
+        var f0 = pickVal('from'), t0 = pickVal('to');
         if (!(f0 < t0)) { alert('끝은 시작보다 뒤여야 합니다.'); return; }
         f0 = Math.floor(f0 / H) * H; t0 = Math.floor(t0 / H) * H;
         var keep = S.rng; setRange('custom', f0, t0 - H); if (S.rng) { S.rng.pickFrom = f0; S.rng.pickTo = t0; S.rng.lastAt = keep && keep.lastAt; }

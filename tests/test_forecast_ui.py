@@ -840,10 +840,13 @@ def t_range_buttons(b):
     t = p.locator("#fc-meta").inner_text()
     check("(62시간 합·최저)" in t and "1시간 양" in t and m.range_calls[-2].get("p_to") is None, "최대 = 서버가 정한 끝까지, 끝 알림: " + t)
     p.click("[data-fcr='custom']"); p.wait_for_timeout(300)
-    fi, ti = p.locator("[data-fcr-from]"), p.locator("[data-fcr-to]")
-    check(fi.is_visible() and ti.is_visible() and fi.get_attribute("step") == "3600", "기간 지정: 날짜·시각 칸")
-    v0 = fi.input_value(); import datetime as dt
-    a = dt.datetime.fromisoformat(v0); fi.fill((a + dt.timedelta(hours=6)).strftime("%Y-%m-%dT%H:00")); ti.fill((a + dt.timedelta(hours=18)).strftime("%Y-%m-%dT%H:00"))
+    fi, ti, fh, th = p.locator("[data-fcr-from]"), p.locator("[data-fcr-to]"), p.locator("[data-fcr-fromh]"), p.locator("[data-fcr-toh]")
+    check(fi.is_visible() and ti.is_visible() and fi.get_attribute("type") == "date" and fh.locator("option").count() == 24 and fh.locator("option").first.inner_text() == "00시",
+          "기간 지정: 날짜 + 시(00~23시) 칸, 분 없음(2026-11-22 사용자)")
+    import datetime as dt
+    a = dt.datetime.fromisoformat(fi.input_value()) + dt.timedelta(hours=int(fh.input_value()))
+    s0, e0 = a + dt.timedelta(hours=6), a + dt.timedelta(hours=18)
+    fi.fill(s0.strftime("%Y-%m-%d")); fh.select_option(str(s0.hour)); ti.fill(e0.strftime("%Y-%m-%d")); th.select_option(str(e0.hour))
     p.click("[data-fcr-apply]"); p.wait_for_timeout(700)
     check("(12시간 합·최저)" in p.locator("#fc-meta").inner_text(), "고른 12시간: " + p.locator("#fc-meta").inner_text())
     p.click("[data-fcr='24']"); p.wait_for_timeout(300)
